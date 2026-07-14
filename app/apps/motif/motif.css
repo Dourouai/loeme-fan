@@ -23,6 +23,12 @@ button {
   color: inherit;
 }
 
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid rgba(113, 87, 232, 0.72);
+  outline-offset: 2px;
+}
+
 .motif-app {
   min-height: 100vh;
   background:
@@ -127,6 +133,11 @@ button {
 .motif-save-dot.is-saving {
   background: #f2b64a;
   box-shadow: 0 0 0 4px rgba(242, 182, 74, 0.1);
+}
+
+.motif-node-status.is-bypassed {
+  background: #aaa6b8;
+  box-shadow: 0 0 0 4px rgba(127, 122, 143, 0.1);
 }
 
 .motif-view-tabs {
@@ -544,10 +555,12 @@ button {
   height: 112px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 0;
   margin-top: 5px;
   overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #d6d1ed transparent;
 }
 
 .motif-node-wrap {
@@ -557,7 +570,7 @@ button {
 
 .motif-node-card {
   position: relative;
-  width: 126px;
+  width: 118px;
   height: 78px;
   display: grid;
   grid-template-columns: 26px 1fr;
@@ -570,6 +583,11 @@ button {
   text-align: left;
   cursor: pointer;
   box-shadow: 0 5px 16px rgba(46, 39, 71, 0.05);
+}
+
+.motif-node-card:hover {
+  border-color: #cfc8f5;
+  transform: translateY(-1px);
 }
 
 .motif-node-card > span {
@@ -615,8 +633,24 @@ button {
   box-shadow: 0 8px 25px rgba(99, 75, 208, 0.13), inset 0 0 0 1px rgba(113, 87, 232, 0.08);
 }
 
+.motif-node-card.is-bypassed:not(.is-selected) {
+  border-style: dashed;
+  background: #faf9fc;
+  box-shadow: none;
+}
+
+.motif-node-card.is-bypassed:not(.is-selected) > span {
+  background: #efedf2;
+  color: #8e8a99;
+}
+
+.motif-node-card.is-bypassed:not(.is-selected) i {
+  background: #b3afbd;
+  box-shadow: none;
+}
+
 .motif-node-link {
-  width: 34px;
+  width: 26px;
   color: #b8aef1;
   font-size: 16px;
   text-align: center;
@@ -628,9 +662,35 @@ button {
 }
 
 .motif-inspector-title {
+  flex: 0 0 auto;
   min-height: 73px;
   padding: 16px;
   border-bottom: 1px solid var(--motif-line);
+}
+
+.motif-reset-button {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--motif-line);
+  border-radius: 8px;
+  background: #fff;
+  color: #8c8d98;
+  font-size: 9px;
+  cursor: pointer;
+}
+
+.motif-reset-button:hover {
+  border-color: #cbc7da;
+  color: #595a66;
+}
+
+.motif-inspector-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #d9d6e5 transparent;
 }
 
 .motif-inspector-title > div {
@@ -680,6 +740,240 @@ button {
   background: #fff;
   color: #322d4f;
   box-shadow: 0 3px 10px rgba(48, 40, 77, 0.08);
+}
+
+.motif-compose-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.motif-compose-toggle > div {
+  display: grid;
+  gap: 3px;
+}
+
+.motif-compose-toggle strong {
+  color: #3b3a45;
+  font-size: 10px;
+}
+
+.motif-compose-toggle small {
+  color: #9b9ba5;
+  font-size: 8px;
+}
+
+.motif-compose-toggle > button {
+  min-width: 72px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #ddd9e8;
+  border-radius: 999px;
+  background: #f4f2f7;
+  color: #888593;
+  font-size: 8px;
+  font-weight: 680;
+  cursor: pointer;
+}
+
+.motif-compose-toggle > button span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #aaa6b3;
+}
+
+.motif-compose-toggle > button.is-active {
+  border-color: #d4ccfa;
+  background: #f1edff;
+  color: #6049d0;
+}
+
+.motif-compose-toggle > button.is-active span {
+  background: var(--motif-green);
+  box-shadow: 0 0 0 3px rgba(75, 199, 154, 0.12);
+}
+
+.motif-compose-copy {
+  margin-top: 13px;
+}
+
+.motif-compose-preview {
+  min-height: 88px;
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border: 1px solid #e3def6;
+  border-radius: 11px;
+  background: linear-gradient(145deg, #fbfaff, #f3f0ff);
+}
+
+.motif-compose-preview > svg {
+  width: 72px;
+  height: 72px;
+  padding: 5px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.motif-compose-preview > span {
+  grid-column: 1 / -1;
+  color: #9692a4;
+  font-size: 9px;
+  text-align: center;
+}
+
+.motif-compose-preview > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.motif-compose-preview strong {
+  font-size: 11px;
+}
+
+.motif-compose-preview small {
+  color: #8f8b9d;
+  font-size: 8px;
+}
+
+.motif-compose-motifs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.motif-compose-motifs button {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid var(--motif-line);
+  border-radius: 9px;
+  background: #fff;
+  color: #787985;
+  font-size: 7px;
+  cursor: pointer;
+}
+
+.motif-compose-motifs button.is-active {
+  border-color: #9e8feb;
+  background: #faf8ff;
+  color: #5545a8;
+}
+
+.motif-compose-motifs svg {
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 4px;
+  border-radius: 6px;
+  background: #f7f6f9;
+}
+
+.motif-compose-motifs button > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.motif-compose-motifs button > i {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 15px;
+  height: 15px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--motif-accent);
+  font-size: 7px;
+  font-style: normal;
+  box-shadow: 0 2px 7px rgba(45, 38, 67, 0.1);
+}
+
+.motif-layout-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.motif-layout-options > button {
+  display: grid;
+  place-items: center;
+  gap: 5px;
+  min-height: 62px;
+  border: 1px solid var(--motif-line);
+  border-radius: 9px;
+  background: #fff;
+  color: #858591;
+  font-size: 8px;
+  cursor: pointer;
+}
+
+.motif-layout-options > button.is-active {
+  border-color: #a99ced;
+  background: #f8f6ff;
+  color: #5441bd;
+}
+
+.motif-layout-icon {
+  position: relative;
+  width: 36px;
+  height: 24px;
+  display: block;
+}
+
+.motif-layout-icon i {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 4px 7px 4px 7px;
+  background: #9a89ea;
+}
+
+.motif-layout-icon i:nth-child(1) { left: 13px; top: 1px; }
+.motif-layout-icon i:nth-child(2) { left: 4px; top: 13px; transform: rotate(-24deg) scale(.85); }
+.motif-layout-icon i:nth-child(3) { right: 4px; top: 13px; transform: rotate(24deg) scale(.85); }
+.motif-layout-icon.is-stack i:nth-child(1) { left: 4px; top: 2px; transform: rotate(-18deg); }
+.motif-layout-icon.is-stack i:nth-child(2) { left: 14px; top: 8px; transform: rotate(14deg); }
+.motif-layout-icon.is-stack i:nth-child(3) { right: 2px; top: 14px; transform: rotate(-8deg) scale(.8); }
+.motif-layout-icon.is-orbit i:nth-child(1) { left: 13px; top: 0; transform: scale(.82); }
+.motif-layout-icon.is-orbit i:nth-child(2) { left: 2px; top: 13px; transform: rotate(-24deg) scale(.82); }
+.motif-layout-icon.is-orbit i:nth-child(3) { right: 2px; top: 13px; transform: rotate(24deg) scale(.82); }
+
+.motif-compose-output-label {
+  display: block;
+  margin-top: 16px;
+}
+
+.motif-placement-feedback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  color: #777783;
+  font-size: 8px;
+}
+
+.motif-placement-feedback b {
+  color: #5d48cb;
+  font-size: 10px;
+}
+
+.motif-placement-feedback small {
+  color: #aaa7b4;
+  font-size: 7px;
 }
 
 .motif-seed-row {
@@ -882,11 +1176,11 @@ button {
 }
 
 .motif-inspector-footer {
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: 70px 1fr;
   gap: 10px;
   align-items: center;
-  margin-top: auto;
   padding: 14px 16px;
   border-top: 1px solid var(--motif-line);
   background: rgba(251, 250, 253, 0.95);

@@ -14,7 +14,7 @@
 2. Scatter / Grid 是否比手工复制更高效。
 3. Artboard 输出是否已经具有独立价值。
 4. Square Repeat 是否能成为可信的增强能力。
-5. 用户是否愿意继续使用更高级的 Compose 与 Network。
+5. 用户是否理解轻量 Compose 的价值，并愿意继续使用更高级的组合与 Network。
 
 ## 2. 本次范围
 
@@ -23,7 +23,8 @@
 - `/apps/motif` 单页工作台。
 - 12–24 个内置 Starter Motif。
 - 严格子集的 SVG 文件导入。
-- 固定 Recipe：Input → Arrange → Colorway → Output。
+- 固定 Recipe：Input → Compose（可选）→ Arrange → Colorway → Output。
+- 轻量 Compose：从 2–3 个 Motif 生成 Bouquet / Stack / Orbit 组合，可与原素材共同排列或单独排列。
 - Scatter 与 Grid。
 - Seed 固定与 Shuffle。
 - Count、Spacing、Scale、Rotation 参数。
@@ -36,7 +37,7 @@
 
 ### 本次不做
 
-- Compose 编辑。
+- 自由画布式 Compose、路径级编辑与自定义锚点。
 - Brick / Half Drop。
 - Compact SVG。
 - 自由节点连接与 XYFlow。
@@ -52,11 +53,11 @@
 - Loeme / Motif 顶部导航。
 - 左侧 Starter / Project Motif Library。
 - 中央 Artboard / Repeat Canvas。
-- 固定 Recipe Strip。
+- 固定五节点 Recipe Strip；Compose 默认 Bypass，可随时启用。
 - 右侧 Arrange / Output Inspector。
 - 桌面优先的响应式布局。
 
-验收：用户能选择内置 Motif，并理解从 Input 到 Output 的固定流程。
+验收：用户能选择内置 Motif，并理解从 Input 到 Output 的五步固定流程；不使用 Compose 也能直接完成任务。
 
 ### Milestone 2：Vector Core
 
@@ -127,4 +128,3 @@
 - 用户是否主动寻找 Compose 或 Network。
 
 MVP 不上传用户 SVG 或项目内容；正式埋点必须在用户同意后启用。
-

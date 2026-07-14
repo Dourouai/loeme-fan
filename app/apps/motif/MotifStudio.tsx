@@ -10,11 +10,13 @@ import {
 } from "react";
 import {
   DEFAULT_SETTINGS,
+  ComposeSettings,
   Motif,
   PALETTES,
   PatternInstance,
   STARTER_MOTIFS,
   StudioSettings,
+  buildCompositionMotif,
   buildInstances,
   exportFlattenedSvg,
   importSvgFile,
@@ -26,6 +28,7 @@ type ProjectState = {
   name: string;
   activeIds: string[];
   importedMotifs: Motif[];
+  compose: ComposeSettings;
   settings: StudioSettings;
 };
 
@@ -43,10 +46,18 @@ type HistoryAction =
 
 const STORAGE_KEY = "loeme-motif-mvp-v1";
 
+const DEFAULT_COMPOSE: ComposeSettings = {
+  enabled: false,
+  selectedIds: ["bloom", "leaf", "sprig"],
+  layout: "bouquet",
+  output: "append",
+};
+
 const initialProject: ProjectState = {
   name: "Coastal Bloom",
   activeIds: ["bloom", "leaf", "sprig", "berries", "petal", "daisy"],
   importedMotifs: [],
+  compose: DEFAULT_COMPOSE,
   settings: DEFAULT_SETTINGS,
 };
 
@@ -154,7 +165,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
   const [hydrated, setHydrated] = useState(false);
   const [saveState, setSaveState] = useState<"Saved" | "Saving">("Saved");
   const [libraryMode, setLibraryMode] = useState<"starter" | "project">("starter");
-  const [selectedNode, setSelectedNode] = useState<"input" | "arrange" | "colorway" | "output">("arrange");
+  const [selectedNode, setSelectedNode] = useState<"input" | "compose" | "arrange" | "colorway" | "output">("arrange");
   const [notice, setNotice] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const project = history.present;
@@ -164,10 +175,31 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
     () => [...STARTER_MOTIFS, ...project.importedMotifs],
     [project.importedMotifs],
   );
-  const motifMap = useMemo(() => new Map(motifs.map((motif) => [motif.id, motif])), [motifs]);
+  const resolvedComposeIds = useMemo(() => {
+    const active = new Set(project.activeIds);
+    return project.compose.selectedIds.filter((id) => active.has(id)).slice(0, 3);
+  }, [project.activeIds, project.compose.selectedIds]);
+  const compositionPreview = useMemo(
+    () => buildCompositionMotif(motifs, resolvedComposeIds, project.compose.layout),
+    [motifs, project.compose.layout, resolvedComposeIds],
+  );
+  const arrangementMotifs = useMemo(
+    () => project.compose.enabled && compositionPreview ? [...motifs, compositionPreview] : motifs,
+    [compositionPreview, motifs, project.compose.enabled],
+  );
+  const arrangementActiveIds = useMemo(() => {
+    if (!project.compose.enabled || !compositionPreview) return project.activeIds;
+    return project.compose.output === "only"
+      ? [compositionPreview.id]
+      : [...project.activeIds, compositionPreview.id];
+  }, [compositionPreview, project.activeIds, project.compose.enabled, project.compose.output]);
+  const motifMap = useMemo(
+    () => new Map(arrangementMotifs.map((motif) => [motif.id, motif])),
+    [arrangementMotifs],
+  );
   const instances = useMemo(
-    () => buildInstances(motifs, project.activeIds, settings),
-    [motifs, project.activeIds, settings],
+    () => buildInstances(arrangementMotifs, arrangementActiveIds, settings),
+    [arrangementActiveIds, arrangementMotifs, settings],
   );
   const displayedInstances = useMemo(
     () => settings.outputMode === "repeat"
@@ -196,6 +228,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
               ...initialProject,
               ...parsed,
               settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
+              compose: { ...DEFAULT_COMPOSE, ...(parsed.compose ?? {}) },
               importedMotifs: Array.isArray(parsed.importedMotifs) ? parsed.importedMotifs : [],
             },
           });
@@ -245,6 +278,31 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
     commit({ ...project, settings: { ...settings, ...patch } });
   }
 
+  function updateCompose(patch: Partial<ComposeSettings>) {
+    if (patch.enabled && project.activeIds.length < 2) {
+      setNotice("Compose 至少需要两个 Input motif。");
+      return;
+    }
+    commit({ ...project, compose: { ...project.compose, ...patch } });
+  }
+
+  function toggleComposeMotif(id: string) {
+    const selected = resolvedComposeIds.includes(id);
+    if (selected && resolvedComposeIds.length <= 2) {
+      setNotice("组合至少需要两个 motif。");
+      return;
+    }
+    if (!selected && resolvedComposeIds.length >= 3) {
+      setNotice("首版组合最多使用三个 motif。");
+      return;
+    }
+    updateCompose({
+      selectedIds: selected
+        ? resolvedComposeIds.filter((selectedId) => selectedId !== id)
+        : [...resolvedComposeIds, id],
+    });
+  }
+
   function toggleMotif(motif: Motif) {
     const isActive = project.activeIds.includes(motif.id);
     const nextIds = isActive
@@ -254,7 +312,22 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
       setNotice("至少保留一个 Motif 参与布局。");
       return;
     }
-    commit({ ...project, activeIds: nextIds });
+    const selectedIds = project.compose.selectedIds.filter((id) => nextIds.includes(id));
+    if (selectedIds.length < 2) {
+      for (const id of nextIds) {
+        if (!selectedIds.includes(id)) selectedIds.push(id);
+        if (selectedIds.length === 2) break;
+      }
+    }
+    commit({
+      ...project,
+      activeIds: nextIds,
+      compose: {
+        ...project.compose,
+        enabled: project.compose.enabled && nextIds.length >= 2,
+        selectedIds: selectedIds.slice(0, 3),
+      },
+    });
   }
 
   async function handleImport(event: ChangeEvent<HTMLInputElement>) {
@@ -286,7 +359,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
       setNotice("当前没有可导出的图形。");
       return;
     }
-    const svg = exportFlattenedSvg(motifs, instances, settings);
+    const svg = exportFlattenedSvg(arrangementMotifs, instances, settings);
     const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -388,6 +461,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                   key={motif.id}
                   className={`motif-card ${active ? "is-active" : ""}`}
                   onClick={() => toggleMotif(motif)}
+                  aria-pressed={active}
                   title={`${active ? "Remove" : "Add"} ${motif.name}`}
                 >
                   <span className="motif-card-preview">
@@ -487,26 +561,29 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                 <span className="motif-eyebrow">RECIPE</span>
                 <h2>Vector flow</h2>
               </div>
-              <span>Fixed for MVP · no broken connections</span>
+              <span>5-step recipe · Compose is optional</span>
             </div>
             <div className="motif-recipe-flow">
               {([
                 ["input", "01", "Input", `${project.activeIds.length} motifs`],
-                ["arrange", "02", "Arrange", settings.layoutMode === "scatter" ? "Scatter" : "Grid"],
-                ["colorway", "03", "Colorway", palette.name],
-                ["output", "04", "Output", settings.outputMode === "repeat" ? "Square repeat" : "Artboard"],
+                ["compose", "02", "Compose", project.compose.enabled ? `${project.compose.layout} · ${resolvedComposeIds.length}` : "Bypassed"],
+                ["arrange", "03", "Arrange", settings.layoutMode === "scatter" ? "Scatter" : "Grid"],
+                ["colorway", "04", "Colorway", palette.name],
+                ["output", "05", "Output", settings.outputMode === "repeat" ? "Square repeat" : "Artboard"],
               ] as const).map((node, index) => (
                 <div className="motif-node-wrap" key={node[0]}>
                   <button
-                    className={`motif-node-card ${selectedNode === node[0] ? "is-selected" : ""}`}
+                    className={`motif-node-card ${selectedNode === node[0] ? "is-selected" : ""} ${node[0] === "compose" && !project.compose.enabled ? "is-bypassed" : ""}`}
                     onClick={() => setSelectedNode(node[0])}
+                    aria-pressed={selectedNode === node[0]}
+                    aria-label={`${node[2]} node, ${node[3]}`}
                   >
                     <span>{node[1]}</span>
                     <strong>{node[2]}</strong>
                     <small>{node[3]}</small>
                     <i />
                   </button>
-                  {index < 3 && <span className="motif-node-link" aria-hidden="true">→</span>}
+                  {index < 4 && <span className="motif-node-link" aria-hidden="true">→</span>}
                 </div>
               ))}
             </div>
@@ -516,13 +593,14 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
         <aside className="motif-inspector motif-panel">
           <div className="motif-inspector-title">
             <div>
-              <span className="motif-node-status" />
+              <span className={`motif-node-status ${selectedNode === "compose" && !project.compose.enabled ? "is-bypassed" : ""}`} />
               <span className="motif-eyebrow">{selectedNode.toUpperCase()}</span>
-              <h2>{selectedNode === "input" ? "Input set" : selectedNode === "arrange" ? "Arrange" : selectedNode === "colorway" ? "Colorway" : "Output"}</h2>
+              <h2>{selectedNode === "input" ? "Input set" : selectedNode === "compose" ? "Compose" : selectedNode === "arrange" ? "Arrange" : selectedNode === "colorway" ? "Colorway" : "Output"}</h2>
             </div>
-            <button className="motif-icon-button" aria-label="Reset project" title="Reset project" onClick={resetProject}>⋯</button>
+            <button className="motif-reset-button" aria-label="Reset project" title="Reset project" onClick={resetProject}>Reset</button>
           </div>
 
+          <div className="motif-inspector-body">
           {selectedNode === "input" && (
             <div className="motif-inspector-section">
               <p className="motif-section-copy">Choose Starter motifs or import a simple SVG. Active motifs flow into Arrange as one set.</p>
@@ -541,13 +619,91 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
             </div>
           )}
 
+          {selectedNode === "compose" && (
+            <>
+              <div className="motif-inspector-section">
+                <div className="motif-compose-toggle">
+                  <div>
+                    <strong>Combine before Arrange</strong>
+                    <small>Optional · defaults to bypass</small>
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={project.compose.enabled}
+                    className={project.compose.enabled ? "is-active" : ""}
+                    onClick={() => updateCompose({ enabled: !project.compose.enabled })}
+                  >
+                    <span />{project.compose.enabled ? "On" : "Bypass"}
+                  </button>
+                </div>
+                <p className="motif-section-copy motif-compose-copy">Select 2–3 motifs and turn them into one reusable composition. Arrange then treats it as a single vector unit.</p>
+                <div className="motif-compose-preview" aria-label="Composition preview">
+                  {compositionPreview ? <MiniMotif motif={compositionPreview} color={palette.colors[0]} /> : <span>Select two motifs</span>}
+                  <div>
+                    <strong>{project.compose.layout[0].toUpperCase() + project.compose.layout.slice(1)}</strong>
+                    <small>{resolvedComposeIds.length} motifs · paths preserved</small>
+                  </div>
+                </div>
+              </div>
+
+              <div className="motif-inspector-section">
+                <span className="motif-section-label">Motifs in composition</span>
+                <div className="motif-compose-motifs">
+                  {project.activeIds.map((id, index) => {
+                    const motif = motifMap.get(id);
+                    const selected = resolvedComposeIds.includes(id);
+                    return motif ? (
+                      <button
+                        key={id}
+                        className={selected ? "is-active" : ""}
+                        aria-pressed={selected}
+                        onClick={() => toggleComposeMotif(id)}
+                        title={`${selected ? "Remove" : "Add"} ${motif.name} ${selected ? "from" : "to"} composition`}
+                      >
+                        <MiniMotif motif={motif} color={palette.colors[index % palette.colors.length]} />
+                        <span>{motif.name}</span>
+                        <i>{selected ? "✓" : "+"}</i>
+                      </button>
+                    ) : null;
+                  })}
+                </div>
+              </div>
+
+              <div className="motif-inspector-section">
+                <span className="motif-section-label">Composition layout</span>
+                <div className="motif-layout-options">
+                  {(["bouquet", "stack", "orbit"] as const).map((layout) => (
+                    <button
+                      key={layout}
+                      className={project.compose.layout === layout ? "is-active" : ""}
+                      aria-pressed={project.compose.layout === layout}
+                      onClick={() => updateCompose({ layout })}
+                    >
+                      <span className={`motif-layout-icon is-${layout}`}><i /><i /><i /></span>
+                      {layout[0].toUpperCase() + layout.slice(1)}
+                    </button>
+                  ))}
+                </div>
+                <span className="motif-section-label motif-compose-output-label">Send to Arrange</span>
+                <div className="motif-segmented">
+                  <button aria-pressed={project.compose.output === "append"} className={project.compose.output === "append" ? "is-active" : ""} onClick={() => updateCompose({ output: "append" })}>With originals</button>
+                  <button aria-pressed={project.compose.output === "only"} className={project.compose.output === "only" ? "is-active" : ""} onClick={() => updateCompose({ output: "only" })}>Composition only</button>
+                </div>
+              </div>
+            </>
+          )}
+
           {selectedNode === "arrange" && (
             <>
               <div className="motif-inspector-section">
                 <span className="motif-section-label">Layout</span>
                 <div className="motif-segmented">
-                  <button className={settings.layoutMode === "scatter" ? "is-active" : ""} onClick={() => updateSettings({ layoutMode: "scatter" })}>Scatter</button>
-                  <button className={settings.layoutMode === "grid" ? "is-active" : ""} onClick={() => updateSettings({ layoutMode: "grid" })}>Grid</button>
+                  <button aria-pressed={settings.layoutMode === "scatter"} className={settings.layoutMode === "scatter" ? "is-active" : ""} onClick={() => updateSettings({ layoutMode: "scatter" })}>Scatter</button>
+                  <button aria-pressed={settings.layoutMode === "grid"} className={settings.layoutMode === "grid" ? "is-active" : ""} onClick={() => updateSettings({ layoutMode: "grid" })}>Grid</button>
+                </div>
+                <div className="motif-placement-feedback">
+                  <span><b>{instances.length}</b> / {settings.targetCount} placed</span>
+                  <small>{settings.layoutMode === "scatter" ? "Collision-aware placement" : `${settings.columns} column grid`}</small>
                 </div>
               </div>
               <div className="motif-inspector-section">
@@ -583,6 +739,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                   <button
                     key={item.id}
                     className={settings.paletteId === item.id ? "is-active" : ""}
+                    aria-pressed={settings.paletteId === item.id}
                     onClick={() => updateSettings({ paletteId: item.id })}
                   >
                     <span className="motif-palette-swatches" style={{ background: item.background }}>
@@ -601,8 +758,8 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
               <div className="motif-inspector-section">
                 <span className="motif-section-label">Output mode</span>
                 <div className="motif-segmented">
-                  <button className={settings.outputMode === "artboard" ? "is-active" : ""} onClick={() => updateSettings({ outputMode: "artboard" })}>Artboard</button>
-                  <button className={settings.outputMode === "repeat" ? "is-active" : ""} onClick={() => updateSettings({ outputMode: "repeat" })}>Repeat</button>
+                  <button aria-pressed={settings.outputMode === "artboard"} className={settings.outputMode === "artboard" ? "is-active" : ""} onClick={() => updateSettings({ outputMode: "artboard" })}>Artboard</button>
+                  <button aria-pressed={settings.outputMode === "repeat"} className={settings.outputMode === "repeat" ? "is-active" : ""} onClick={() => updateSettings({ outputMode: "repeat" })}>Repeat</button>
                 </div>
               </div>
               <div className="motif-inspector-section motif-size-grid">
@@ -618,6 +775,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
               )}
             </>
           )}
+          </div>
 
           <div className="motif-inspector-footer">
             <div>

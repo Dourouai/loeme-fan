@@ -10,6 +10,15 @@ export type Motif = {
 
 export type LayoutMode = "scatter" | "grid";
 export type OutputMode = "artboard" | "repeat";
+export type ComposeLayout = "bouquet" | "stack" | "orbit";
+export type ComposeOutput = "append" | "only";
+
+export type ComposeSettings = {
+  enabled: boolean;
+  selectedIds: string[];
+  layout: ComposeLayout;
+  output: ComposeOutput;
+};
 
 export type Palette = {
   id: string;
@@ -170,6 +179,53 @@ export const STARTER_MOTIFS: Motif[] = [
       '<circle cx="50" cy="50" r="35" fill="none" stroke="currentColor" stroke-width="14"/><circle cx="50" cy="50" r="7" fill="currentColor"/>',
   },
 ];
+
+const COMPOSE_TRANSFORMS: Record<ComposeLayout, Array<[number, number, number, number]>> = {
+  bouquet: [
+    [50, 39, 0, 0.62],
+    [27, 70, -28, 0.45],
+    [73, 70, 28, 0.45],
+  ],
+  stack: [
+    [35, 34, -18, 0.54],
+    [65, 55, 18, 0.52],
+    [43, 77, -8, 0.38],
+  ],
+  orbit: [
+    [50, 27, 0, 0.43],
+    [27, 68, -22, 0.39],
+    [73, 68, 22, 0.39],
+  ],
+};
+
+export function buildCompositionMotif(
+  motifs: Motif[],
+  selectedIds: string[],
+  layout: ComposeLayout,
+): Motif | null {
+  const selected = selectedIds
+    .map((id) => motifs.find((motif) => motif.id === id))
+    .filter((motif): motif is Motif => Boolean(motif))
+    .slice(0, 3);
+
+  if (selected.length < 2) return null;
+
+  const transforms = COMPOSE_TRANSFORMS[layout];
+  const body = selected
+    .map((motif, index) => {
+      const [x, y, rotation, scale] = transforms[index];
+      return `<g transform="translate(${x} ${y}) rotate(${rotation}) scale(${scale}) translate(-50 -50)">${motif.body}</g>`;
+    })
+    .join("");
+
+  return {
+    id: "composition-live",
+    name: "Composition",
+    category: "Project",
+    source: "loeme",
+    body,
+  };
+}
 
 export const DEFAULT_SETTINGS: StudioSettings = {
   layoutMode: "scatter",
