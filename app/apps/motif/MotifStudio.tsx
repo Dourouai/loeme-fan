@@ -18,8 +18,10 @@ import {
   StudioSettings,
   buildCompositionMotif,
   buildInstances,
+  colorizeInstances,
   exportFlattenedSvg,
   importSvgFile,
+  resolveMotifBody,
   resolvePalette,
   withWrapCopies,
 } from "./motif-engine";
@@ -97,11 +99,13 @@ function historyReducer(state: HistoryState, action: HistoryAction): HistoryStat
 function MotifGlyph({
   motif,
   instance,
+  colors,
   offsetX = 0,
   offsetY = 0,
 }: {
   motif: Motif;
   instance: PatternInstance;
+  colors: string[];
   offsetX?: number;
   offsetY?: number;
 }) {
@@ -110,15 +114,15 @@ function MotifGlyph({
     <g
       transform={transform}
       color={instance.color}
-      dangerouslySetInnerHTML={{ __html: motif.body }}
+      dangerouslySetInnerHTML={{ __html: resolveMotifBody(motif, colors, instance.colorIndex) }}
     />
   );
 }
 
-function MiniMotif({ motif, color = "#7c58e8" }: { motif: Motif; color?: string }) {
+function MiniMotif({ motif, color = "#7c58e8", colors = [color] }: { motif: Motif; color?: string; colors?: string[] }) {
   return (
     <svg viewBox="0 0 100 100" aria-hidden="true">
-      <g color={color} dangerouslySetInnerHTML={{ __html: motif.body }} />
+      <g color={color} dangerouslySetInnerHTML={{ __html: resolveMotifBody(motif, colors) }} />
     </svg>
   );
 }
@@ -128,7 +132,7 @@ function PalettePreview({ motifs, colors, background }: { motifs: Motif[]; color
     <span className="motif-palette-preview" style={{ background }} aria-hidden="true">
       {motifs.slice(0, 5).map((motif, index) => (
         <span key={motif.id}>
-          <MiniMotif motif={motif} color={colors[index % colors.length]} />
+          <MiniMotif motif={motif} color={colors[index % colors.length]} colors={colors} />
         </span>
       ))}
     </span>
@@ -182,6 +186,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
   const [saveState, setSaveState] = useState<"Saved" | "Saving">("Saved");
   const [libraryMode, setLibraryMode] = useState<"starter" | "project">("starter");
   const [selectedNode, setSelectedNode] = useState<NodeId>("arrange");
+  const [viewedNode, setViewedNode] = useState<NodeId>("arrange");
   const [notice, setNotice] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const project = history.present;
@@ -222,17 +227,47 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
       .filter((motif): motif is Motif => Boolean(motif)),
     [arrangementActiveIds, motifMap],
   );
+  const palette = resolvePalette(settings);
+  const layoutInstances = useMemo(
+    () => buildInstances(arrangementMotifs, arrangementActiveIds, {
+      columns: settings.columns,
+      height: settings.height,
+      layoutMode: settings.layoutMode,
+      minDistance: settings.minDistance,
+      rotation: settings.rotation,
+      scaleMax: settings.scaleMax,
+      scaleMin: settings.scaleMin,
+      seed: settings.seed,
+      surfaceMode: settings.surfaceMode,
+      targetCount: settings.targetCount,
+      width: settings.width,
+    }),
+    [
+      arrangementActiveIds,
+      arrangementMotifs,
+      settings.columns,
+      settings.height,
+      settings.layoutMode,
+      settings.minDistance,
+      settings.rotation,
+      settings.scaleMax,
+      settings.scaleMin,
+      settings.seed,
+      settings.surfaceMode,
+      settings.targetCount,
+      settings.width,
+    ],
+  );
   const instances = useMemo(
-    () => buildInstances(arrangementMotifs, arrangementActiveIds, settings),
-    [arrangementActiveIds, arrangementMotifs, settings],
+    () => colorizeInstances(layoutInstances, palette.colors),
+    [layoutInstances, palette.colors],
   );
   const displayedInstances = useMemo(
-    () => settings.outputMode === "repeat"
+    () => settings.surfaceMode === "repeat"
       ? withWrapCopies(instances, settings.width, settings.height)
       : instances,
-    [instances, settings.outputMode, settings.width, settings.height],
+    [instances, settings.surfaceMode, settings.width, settings.height],
   );
-  const palette = resolvePalette(settings);
 
   useEffect(() => {
     if (startFresh) {
@@ -250,12 +285,18 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
       if (stored) {
         const parsed = JSON.parse(stored) as ProjectState;
         if (parsed?.settings && Array.isArray(parsed.activeIds)) {
+          const legacySettings = parsed.settings as StudioSettings & { outputMode?: "artboard" | "repeat" };
+          const { outputMode: legacyOutputMode, ...currentSettings } = legacySettings;
           dispatch({
             type: "load",
             next: {
               ...initialProject,
               ...parsed,
-              settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
+              settings: {
+                ...DEFAULT_SETTINGS,
+                ...currentSettings,
+                surfaceMode: legacySettings.surfaceMode ?? legacyOutputMode ?? DEFAULT_SETTINGS.surfaceMode,
+              },
               compose: {
                 ...DEFAULT_COMPOSE,
                 ...(parsed.compose ?? {}),
@@ -311,7 +352,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
   }
 
   function updateCompose(patch: Partial<ComposeSettings>) {
-    if (patch.enabled && project.activeIds.length < 2) {
+    if (patch.enabled && resolvedComposeIds.length < 2) {
       setNotice("Compose 至少需要两个 Input motif。");
       return;
     }
@@ -337,6 +378,15 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
 
   function toggleMotif(motif: Motif) {
     const isActive = project.activeIds.includes(motif.id);
+    if (
+      isActive
+      && project.compose.enabled
+      && resolvedComposeIds.includes(motif.id)
+      && resolvedComposeIds.length <= 2
+    ) {
+      setNotice("这个 motif 正在 Compose 中使用。请先在 Compose 节点更换或关闭组合。");
+      return;
+    }
     const nextIds = isActive
       ? project.activeIds.filter((id) => id !== motif.id)
       : [...project.activeIds, motif.id];
@@ -345,18 +395,11 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
       return;
     }
     const selectedIds = project.compose.selectedIds.filter((id) => nextIds.includes(id));
-    if (selectedIds.length < 2) {
-      for (const id of nextIds) {
-        if (!selectedIds.includes(id)) selectedIds.push(id);
-        if (selectedIds.length === 2) break;
-      }
-    }
     commit({
       ...project,
       activeIds: nextIds,
       compose: {
         ...project.compose,
-        enabled: project.compose.enabled && nextIds.length >= 2,
         selectedIds: selectedIds.slice(0, 3),
       },
     });
@@ -414,7 +457,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
     link.download = `${project.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-") || "loeme-motif"}.svg`;
     link.click();
     URL.revokeObjectURL(url);
-    setNotice(`${settings.outputMode === "repeat" ? "Repeat" : "Artboard"} SVG 已导出。`);
+    setNotice(`${settings.surfaceMode === "repeat" ? "Repeat" : "Artboard"} SVG 已导出。`);
   }
 
   function resetProject() {
@@ -429,9 +472,9 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
   const inputOutputMotifs = project.activeIds
     .map((id) => motifs.find((motif) => motif.id === id))
     .filter((motif): motif is Motif => Boolean(motif));
-  const isSetPreview = selectedNode === "input" || selectedNode === "compose";
-  const previewMotifs = selectedNode === "input" ? inputOutputMotifs : arrangeInputMotifs;
-  const tiles = selectedNode === "output" && settings.outputMode === "repeat" ? 3 : 1;
+  const isSetPreview = viewedNode === "input" || viewedNode === "compose";
+  const previewMotifs = viewedNode === "input" ? inputOutputMotifs : arrangeInputMotifs;
+  const tiles = viewedNode === "output" && settings.surfaceMode === "repeat" ? 3 : 1;
   const canvasWidth = settings.width * tiles;
   const canvasHeight = settings.height * tiles;
   const tileEntries = Array.from({ length: tiles * tiles }, (_, index) => ({
@@ -440,28 +483,28 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
     id: index,
   }));
   const scaleVariation = Math.round((settings.scaleMax - settings.scaleMin) * 100);
-  const canvasTitle = selectedNode === "input"
+  const canvasTitle = viewedNode === "input"
     ? "Input · Motif Set Output"
-    : selectedNode === "compose"
+    : viewedNode === "compose"
       ? project.compose.enabled ? "Compose · Motif Set Output" : "Compose Bypassed · Input Passed Through"
-      : selectedNode === "arrange"
+      : viewedNode === "arrange"
         ? "Arrangement Preview"
-        : selectedNode === "colorway"
+        : viewedNode === "colorway"
           ? "Colorway Preview"
-          : settings.outputMode === "repeat" ? "Seamless Preview" : "Artboard Preview";
+          : settings.surfaceMode === "repeat" ? "Seamless Preview" : "Artboard Preview";
   const nodeContracts: Record<NodeId, { input: string; output: string; summary: string }> = {
     input: { input: "Asset Library", output: "Motif Set", summary: `${inputOutputMotifs.length} motifs out` },
     compose: { input: "Motif Set", output: "Motif Set", summary: `${inputOutputMotifs.length} in · ${arrangeInputMotifs.length} out` },
-    arrange: { input: "Motif Set", output: "Scene", summary: `${arrangeInputMotifs.length} motifs · ${instances.length} instances` },
-    colorway: { input: "Scene", output: "Colored Scene", summary: `${instances.length} instances colored` },
-    output: { input: "Scene", output: "SVG", summary: `${settings.width} × ${settings.height} SVG` },
+    arrange: { input: "Motif Set", output: "Layout Scene", summary: `${arrangeInputMotifs.length} motifs · ${layoutInstances.length} transforms` },
+    colorway: { input: "Layout Scene", output: "Styled Scene", summary: `${instances.length} instances mapped` },
+    output: { input: "Styled Scene", output: "SVG", summary: `${settings.width} × ${settings.height} SVG` },
   };
   const recipeNodes: Array<{ id: NodeId; type: string; name: string; summary: string; optional?: boolean }> = [
     { id: "input", type: "SET", name: "Input", summary: `${inputOutputMotifs.length} motifs out` },
     { id: "compose", type: "SET", name: project.compose.enabled ? "Compose" : "+ Compose", summary: project.compose.enabled ? `${inputOutputMotifs.length} → ${arrangeInputMotifs.length}` : "Optional · bypassed", optional: true },
-    { id: "arrange", type: "SCENE", name: "Arrange", summary: `${arrangeInputMotifs.length} motifs → ${instances.length}` },
+    { id: "arrange", type: "LAYOUT", name: "Arrange", summary: `${arrangeInputMotifs.length} motifs → ${layoutInstances.length}` },
     { id: "colorway", type: "SCENE", name: "Colorway", summary: palette.name },
-    { id: "output", type: "FILE", name: "Output", summary: settings.outputMode === "repeat" ? "Repeat SVG" : "Artboard SVG" },
+    { id: "output", type: "FILE", name: "Output", summary: settings.surfaceMode === "repeat" ? "Repeat SVG" : "Artboard SVG" },
   ];
 
   return (
@@ -488,8 +531,12 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
         <nav className="motif-view-tabs" aria-label="Workspace views">
           <button className="is-active">Canvas</button>
           <button disabled title="Network will follow after MVP validation">Network <small>Soon</small></button>
-          <button onClick={() => updateSettings({ outputMode: settings.outputMode === "repeat" ? "artboard" : "repeat" })}>
-            {settings.outputMode === "repeat" ? "Repeat" : "Artboard"}
+          <button
+            className="motif-surface-tab"
+            onClick={() => updateSettings({ surfaceMode: settings.surfaceMode === "repeat" ? "artboard" : "repeat" })}
+            title="Global surface context · affects Arrange edge behavior"
+          >
+            <small>Surface</small> {settings.surfaceMode === "repeat" ? "Tile" : "Artboard"}
           </button>
         </nav>
 
@@ -506,7 +553,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
             disabled={!history.future.length}
             onClick={() => moveHistory("redo")}
           >↷</button>
-          <button className="motif-export-top" onClick={downloadSvg}>Export SVG <span>↗</span></button>
+          <button className="motif-export-top" onClick={downloadSvg}>Export Final SVG <span>↗</span></button>
         </div>
       </header>
 
@@ -542,7 +589,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                   title={`${active ? "Remove" : "Add"} ${motif.name}`}
                 >
                   <span className="motif-card-preview">
-                    <MiniMotif motif={motif} color={palette.colors[index % palette.colors.length]} />
+                    <MiniMotif motif={motif} color={palette.colors[index % palette.colors.length]} colors={palette.colors} />
                   </span>
                   <span className="motif-card-name">{motif.name}</span>
                   <span className="motif-card-check">{active ? "✓" : "+"}</span>
@@ -575,11 +622,14 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
           <div className="motif-canvas-panel motif-panel">
             <div className="motif-canvas-header">
               <div>
-                <span className="motif-eyebrow">{selectedNode.toUpperCase()} · LIVE PREVIEW</span>
+                <span className="motif-eyebrow">VIEWING {viewedNode.toUpperCase()} · LIVE OUTPUT</span>
                 <h1>{canvasTitle}</h1>
               </div>
               <div className="motif-canvas-status">
                 <span className="motif-live-dot" /> Live
+                {selectedNode !== viewedNode && (
+                  <button onClick={() => setViewedNode(selectedNode)}>View selected</button>
+                )}
                 {!isSetPreview && (
                   <button onClick={() => updateSettings({ showBoundary: !settings.showBoundary })}>
                     {settings.showBoundary ? "Hide grid" : "Show grid"}
@@ -590,18 +640,18 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
 
             <div className="motif-canvas-stage" style={{ background: palette.background }}>
               {isSetPreview ? (
-                <div className="motif-set-preview" role="img" aria-label={`${selectedNode} output with ${previewMotifs.length} motifs`}>
+                <div className="motif-set-preview" role="img" aria-label={`${viewedNode} output with ${previewMotifs.length} motifs`}>
                   <div className="motif-set-preview-grid">
                     {previewMotifs.map((motif, index) => (
                       <div key={motif.id} className={motif.id === "composition-live" ? "is-composition" : ""}>
-                        <MiniMotif motif={motif} color={palette.colors[index % palette.colors.length]} />
+                        <MiniMotif motif={motif} color={palette.colors[index % palette.colors.length]} colors={palette.colors} />
                         <span>{motif.name}</span>
                         {motif.id === "composition-live" && <b>COMPOSED</b>}
                       </div>
                     ))}
                   </div>
                   <div className="motif-set-output-label">
-                    <span>{nodeContracts[selectedNode].output}</span>
+                    <span>{nodeContracts[viewedNode].output}</span>
                     <strong>{previewMotifs.length} motifs</strong>
                   </div>
                 </div>
@@ -609,7 +659,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
               <svg
                 viewBox={`0 0 ${canvasWidth} ${canvasHeight}`}
                 role="img"
-                aria-label={`${settings.outputMode} preview with ${instances.length} vector instances`}
+                aria-label={`${settings.surfaceMode} preview with ${instances.length} vector instances`}
                 preserveAspectRatio="xMidYMid meet"
               >
                 <defs>
@@ -623,7 +673,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                     <g clipPath="url(#motif-tile-clip)">
                       {displayedInstances.map((instance) => {
                         const motif = motifMap.get(instance.motifId);
-                        return motif ? <MotifGlyph key={`${tile.id}-${instance.id}`} motif={motif} instance={instance} /> : null;
+                        return motif ? <MotifGlyph key={`${tile.id}-${instance.id}`} motif={motif} instance={instance} colors={palette.colors} /> : null;
                       })}
                     </g>
                     {settings.showBoundary && (
@@ -634,7 +684,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                         height={Math.max(0, settings.height - 1.5)}
                         fill="none"
                         stroke="#7c58e8"
-                        strokeOpacity={settings.outputMode === "repeat" ? 0.2 : 0.42}
+                        strokeOpacity={settings.surfaceMode === "repeat" ? 0.2 : 0.42}
                         strokeWidth="1.5"
                         vectorEffect="non-scaling-stroke"
                       />
@@ -647,8 +697,8 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
               <div className="motif-canvas-toolbar">
                 {isSetPreview ? (
                   <>
-                    <span>{nodeContracts[selectedNode].input}</span>
-                    <span>→ {nodeContracts[selectedNode].output}</span>
+                    <span>{nodeContracts[viewedNode].input}</span>
+                    <span>→ {nodeContracts[viewedNode].output}</span>
                     <span>{previewMotifs.length} motifs</span>
                   </>
                 ) : (
@@ -674,8 +724,8 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
               {recipeNodes.map((node, index) => (
                 <div className="motif-node-wrap" key={node.id}>
                   <button
-                    className={`motif-node-card ${selectedNode === node.id ? "is-selected" : ""} ${node.id === "compose" && !project.compose.enabled ? "is-bypassed is-optional" : ""}`}
-                    onClick={() => setSelectedNode(node.id)}
+                    className={`motif-node-card ${selectedNode === node.id ? "is-selected" : ""} ${viewedNode === node.id ? "is-viewed" : ""} ${node.id === "compose" && !project.compose.enabled ? "is-bypassed is-optional" : ""}`}
+                    onClick={() => { setSelectedNode(node.id); setViewedNode(node.id); }}
                     aria-pressed={selectedNode === node.id}
                     aria-label={`${node.name} node, ${node.summary}`}
                   >
@@ -683,6 +733,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                     <strong>{node.name}</strong>
                     <small>{node.summary}</small>
                     <em>{nodeContracts[node.id].input} → {nodeContracts[node.id].output}</em>
+                    {viewedNode === node.id && <b className="motif-viewer-flag" title="Shown on canvas">VIEW</b>}
                     <i />
                   </button>
                   {index < 4 && <span className="motif-node-link" aria-hidden="true">→</span>}
@@ -717,7 +768,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                   const motif = motifMap.get(id);
                   return motif ? (
                     <div key={id}>
-                      <MiniMotif motif={motif} color={palette.colors[index % palette.colors.length]} />
+                      <MiniMotif motif={motif} color={palette.colors[index % palette.colors.length]} colors={palette.colors} />
                       <span>{motif.name}</span>
                     </div>
                   ) : null;
@@ -736,7 +787,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                   <p>Choose a few parts, pick a starting composition, then send the result into Arrange.</p>
                 </div>
                 <div className="motif-compose-preview" aria-label="Composition preview">
-                  {compositionPreview ? <MiniMotif motif={compositionPreview} color={palette.colors[0]} /> : <span>Select two motifs</span>}
+                  {compositionPreview ? <MiniMotif motif={compositionPreview} color={palette.colors[0]} colors={palette.colors} /> : <span>Select two motifs</span>}
                   <div>
                     <strong>{project.compose.layout[0].toUpperCase() + project.compose.layout.slice(1)}</strong>
                     <small>{resolvedComposeIds.length} motifs · paths preserved</small>
@@ -772,7 +823,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                         onClick={() => toggleComposeMotif(id)}
                         title={`${selected ? "Remove" : "Add"} ${motif.name} ${selected ? "from" : "to"} composition`}
                       >
-                        <MiniMotif motif={motif} color={palette.colors[index % palette.colors.length]} />
+                        <MiniMotif motif={motif} color={palette.colors[index % palette.colors.length]} colors={palette.colors} />
                         <span>{motif.name}</span>
                         <i>{selected ? "✓" : "+"}</i>
                       </button>
@@ -815,7 +866,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                   </div>
                   <div className="motif-output-thumbnails">
                     {arrangeInputMotifs.slice(0, 6).map((motif, index) => (
-                      <span key={motif.id} title={motif.name}><MiniMotif motif={motif} color={palette.colors[index % palette.colors.length]} /></span>
+                      <span key={motif.id} title={motif.name}><MiniMotif motif={motif} color={palette.colors[index % palette.colors.length]} colors={palette.colors} /></span>
                     ))}
                     {arrangeInputMotifs.length > 6 && <b>+{arrangeInputMotifs.length - 6}</b>}
                     <i aria-hidden="true">→</i>
@@ -840,7 +891,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                   </div>
                   <div>
                     {arrangeInputMotifs.slice(0, 5).map((motif, index) => (
-                      <span key={motif.id}><MiniMotif motif={motif} color={palette.colors[index % palette.colors.length]} /></span>
+                      <span key={motif.id}><MiniMotif motif={motif} color={palette.colors[index % palette.colors.length]} colors={palette.colors} /></span>
                     ))}
                     {arrangeInputMotifs.length > 5 && <b>+{arrangeInputMotifs.length - 5}</b>}
                   </div>
@@ -967,21 +1018,20 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
               <div className="motif-inspector-section">
                 <div className="motif-config-intro">
                   <span>DELIVERY</span>
-                  <strong>What are you exporting?</strong>
-                  <p>Choose an independent composition or a seamless tile. The preview updates before download.</p>
+                  <strong>Package the final SVG</strong>
+                  <p>Output sets the canvas size and validates the file. Edge behavior comes from the global Surface context.</p>
                 </div>
-                <div className="motif-output-modes">
-                  <button aria-pressed={settings.outputMode === "artboard"} className={settings.outputMode === "artboard" ? "is-active" : ""} onClick={() => updateSettings({ outputMode: "artboard" })}>
-                    <span className="motif-output-icon is-artboard"><i /></span>
-                    <strong>Artboard</strong>
-                    <small>One composition</small>
-                    <b>✓</b>
-                  </button>
-                  <button aria-pressed={settings.outputMode === "repeat"} className={settings.outputMode === "repeat" ? "is-active" : ""} onClick={() => updateSettings({ outputMode: "repeat" })}>
-                    <span className="motif-output-icon is-repeat"><i /><i /><i /><i /></span>
-                    <strong>Seamless tile</strong>
-                    <small>Edges wrapped</small>
-                    <b>✓</b>
+                <div className="motif-surface-context">
+                  <span className={`motif-output-icon ${settings.surfaceMode === "repeat" ? "is-repeat" : "is-artboard"}`}>
+                    <i /><i /><i /><i />
+                  </span>
+                  <div>
+                    <small>GLOBAL SURFACE</small>
+                    <strong>{settings.surfaceMode === "repeat" ? "Seamless tile" : "Artboard"}</strong>
+                    <p>{settings.surfaceMode === "repeat" ? "Arrange wraps edge collisions." : "Arrange keeps motifs inside the canvas."}</p>
+                  </div>
+                  <button onClick={() => updateSettings({ surfaceMode: settings.surfaceMode === "repeat" ? "artboard" : "repeat" })}>
+                    Switch
                   </button>
                 </div>
               </div>
@@ -1000,7 +1050,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                   <span><i />Show tile boundary</span><b>{settings.showBoundary ? "On" : "Off"}</b>
                 </button>
               </div>
-              {settings.outputMode === "repeat" && (
+              {settings.surfaceMode === "repeat" && (
                 <div className="motif-repeat-note">
                   <span>Square repeat</span>
                   <strong>Edges wrapped</strong>
@@ -1012,7 +1062,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                 <div className="motif-export-checks">
                   <span><i>✓</i>Vector paths preserved</span>
                   <span><i>✓</i>No embedded raster images</span>
-                  <span><i>✓</i>{settings.outputMode === "repeat" ? "Wrapped edge copies included" : "Artboard clipping applied"}</span>
+                  <span><i>✓</i>{settings.surfaceMode === "repeat" ? "Wrapped edge copies included" : "Artboard clipping applied"}</span>
                 </div>
               </div>
             </>
@@ -1027,7 +1077,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
             {selectedNode === "output" ? (
               <button onClick={downloadSvg}>Export SVG <span>↗</span></button>
             ) : (
-              <button onClick={() => setSelectedNode("output")}>View final output <span>↗</span></button>
+              <button onClick={() => setViewedNode("output")}>View final output <span>↗</span></button>
             )}
           </div>
         </aside>

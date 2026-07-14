@@ -42,7 +42,10 @@ test("server-renders the Loeme Motif workspace", async () => {
   assert.match(html, /exact motif set produced by the previous node/);
   assert.match(html, /New variation/);
   assert.match(html, /Starter/);
-  assert.match(html, /Export SVG/);
+  assert.match(html, /Export Final SVG/);
+  assert.match(html, /VIEWING/);
+  assert.match(html, /LIVE OUTPUT/);
+  assert.match(html, /Surface/);
   assert.doesNotMatch(html, /Continue to/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
@@ -54,11 +57,12 @@ test("root route points to the Motif app", async () => {
 });
 
 test("removes the disposable starter and uses product metadata", async () => {
-  const [layout, packageJson, motifCss, studioSource] = await Promise.all([
+  const [layout, packageJson, motifCss, studioSource, engineSource] = await Promise.all([
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../app/apps/motif/motif.css", import.meta.url), "utf8"),
     readFile(new URL("../app/apps/motif/MotifStudio.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/apps/motif/motif-engine.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(layout, /Loeme Motif/);
@@ -69,5 +73,11 @@ test("removes the disposable starter and uses product metadata", async () => {
   assert.match(motifCss, /height:\s*calc\(100vh - 64px\)/);
   assert.match(studioSource, /Replace selected/);
   assert.match(studioSource, /filter\(\(id\) => !resolvedComposeIds\.includes\(id\)\)/);
+  assert.match(studioSource, /viewedNode/);
+  assert.match(studioSource, /colorizeInstances\(layoutInstances, palette\.colors\)/);
+  assert.match(engineSource, /surfaceMode: SurfaceMode/);
+  assert.match(engineSource, /__LOEME_SLOT_/);
+  assert.match(engineSource, /collisionRadius/);
+  assert.doesNotMatch(engineSource, /outputMode:/);
   await assert.rejects(access(new URL("../app/_sites-preview/SkeletonPreview.tsx", templateRoot)));
 });

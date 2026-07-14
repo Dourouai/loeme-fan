@@ -179,6 +179,18 @@ input:focus-visible {
   text-transform: uppercase;
 }
 
+.motif-view-tabs .motif-surface-tab {
+  min-width: 112px;
+  color: #4f466f;
+  box-shadow: inset 0 0 0 1px #d9d2f7;
+}
+
+.motif-view-tabs .motif-surface-tab small {
+  margin-right: 4px;
+  color: #958aa9;
+  letter-spacing: .04em;
+}
+
 .motif-top-actions {
   justify-self: end;
   gap: 8px;
@@ -731,6 +743,21 @@ input:focus-visible {
 .motif-node-card.is-selected {
   border-color: #9b8bea;
   box-shadow: 0 8px 25px rgba(99, 75, 208, 0.13), inset 0 0 0 1px rgba(113, 87, 232, 0.08);
+}
+
+.motif-node-card.is-viewed:not(.is-selected) {
+  border-color: #c9c0f5;
+  box-shadow: inset 0 -3px 0 #e6e0ff;
+}
+
+.motif-node-card .motif-viewer-flag {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  color: #6f59dc;
+  font-size: 5px;
+  font-weight: 820;
+  letter-spacing: .08em;
 }
 
 .motif-node-card.is-bypassed:not(.is-selected) {
@@ -1775,6 +1802,61 @@ input:focus-visible {
 .motif-output-icon.is-repeat i {
   border-radius: 3px;
   background: linear-gradient(135deg, #ffd8c7 0 34%, #795ee2 35% 57%, #acd091 58%);
+}
+
+.motif-surface-context {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  align-items: center;
+  gap: 11px;
+  padding: 10px;
+  border: 1px solid #ded8f7;
+  border-radius: 11px;
+  background: linear-gradient(145deg, #fbfaff, #f5f2ff);
+}
+
+.motif-surface-context .motif-output-icon {
+  width: 72px;
+  height: 50px;
+}
+
+.motif-surface-context > div {
+  min-width: 0;
+}
+
+.motif-surface-context small,
+.motif-surface-context strong {
+  display: block;
+}
+
+.motif-surface-context small {
+  color: #8f82c4;
+  font-size: 7px;
+  font-weight: 760;
+  letter-spacing: .08em;
+}
+
+.motif-surface-context strong {
+  margin-top: 3px;
+  font-size: 10px;
+}
+
+.motif-surface-context p {
+  margin: 3px 0 0;
+  color: #8c8998;
+  font-size: 7px;
+  line-height: 1.4;
+}
+
+.motif-surface-context > button {
+  height: 27px;
+  padding: 0 8px;
+  border: 1px solid #d6cef7;
+  border-radius: 7px;
+  background: #fff;
+  color: #6652ca;
+  font-size: 8px;
+  cursor: pointer;
 }
 
 .motif-size-presets {

@@ -6,10 +6,14 @@ export type Motif = {
   category: MotifCategory;
   body: string;
   source: "loeme" | "upload";
+  bounds?: MotifBounds;
+  collisionRadius?: number;
 };
 
+export type MotifBounds = { x: number; y: number; width: number; height: number };
+
 export type LayoutMode = "scatter" | "grid";
-export type OutputMode = "artboard" | "repeat";
+export type SurfaceMode = "artboard" | "repeat";
 export type ComposeLayout = "bouquet" | "stack" | "orbit";
 export type ComposeOutput = "replace" | "append" | "only";
 
@@ -29,7 +33,7 @@ export type Palette = {
 
 export type StudioSettings = {
   layoutMode: LayoutMode;
-  outputMode: OutputMode;
+  surfaceMode: SurfaceMode;
   seed: number;
   targetCount: number;
   columns: number;
@@ -45,17 +49,33 @@ export type StudioSettings = {
   showBoundary: boolean;
 };
 
-export type PatternInstance = {
+export type LayoutSettings = Pick<StudioSettings,
+  | "layoutMode"
+  | "surfaceMode"
+  | "seed"
+  | "targetCount"
+  | "columns"
+  | "minDistance"
+  | "scaleMin"
+  | "scaleMax"
+  | "rotation"
+  | "width"
+  | "height"
+>;
+
+export type LayoutInstance = {
   id: string;
   motifId: string;
   x: number;
   y: number;
   scale: number;
   rotation: number;
-  color: string;
+  colorIndex: number;
   radius: number;
   wrappedFrom?: string;
 };
+
+export type PatternInstance = LayoutInstance & { color: string };
 
 export const PALETTES: Palette[] = [
   {
@@ -216,9 +236,27 @@ export function buildCompositionMotif(
   const body = selected
     .map((motif, index) => {
       const [x, y, rotation, scale] = transforms[index];
-      return `<g transform="translate(${x} ${y}) rotate(${rotation}) scale(${scale}) translate(-50 -50)">${motif.body}</g>`;
+      return `<g color="__LOEME_SLOT_${index}__" transform="translate(${x} ${y}) rotate(${rotation}) scale(${scale}) translate(-50 -50)">${motif.body}</g>`;
     })
     .join("");
+
+  const points = selected.flatMap((_, index) => {
+    const [x, y, rotation, scale] = transforms[index];
+    const radians = rotation * Math.PI / 180;
+    return [[0, 0], [100, 0], [100, 100], [0, 100]].map(([sourceX, sourceY]) => {
+      const localX = (sourceX - 50) * scale;
+      const localY = (sourceY - 50) * scale;
+      return {
+        x: x + localX * Math.cos(radians) - localY * Math.sin(radians),
+        y: y + localX * Math.sin(radians) + localY * Math.cos(radians),
+      };
+    });
+  });
+  const minX = Math.min(...points.map((point) => point.x));
+  const maxX = Math.max(...points.map((point) => point.x));
+  const minY = Math.min(...points.map((point) => point.y));
+  const maxY = Math.max(...points.map((point) => point.y));
+  const collisionRadius = Math.max(...points.map((point) => Math.hypot(point.x - 50, point.y - 50)));
 
   return {
     id: "composition-live",
@@ -226,12 +264,14 @@ export function buildCompositionMotif(
     category: "Project",
     source: "loeme",
     body,
+    bounds: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+    collisionRadius,
   };
 }
 
 export const DEFAULT_SETTINGS: StudioSettings = {
   layoutMode: "scatter",
-  outputMode: "repeat",
+  surfaceMode: "repeat",
   seed: 42719,
   targetCount: 34,
   columns: 7,
@@ -254,6 +294,13 @@ export function resolvePalette(settings: StudioSettings): Palette {
     background: settings.backgroundColor ?? preset.background,
     colors: settings.paletteColors?.length ? settings.paletteColors : preset.colors,
   };
+}
+
+export function resolveMotifBody(motif: Motif, colors: string[], colorIndex = 0) {
+  if (!colors.length) return motif.body;
+  return motif.body.replace(/__LOEME_SLOT_(\d+)__/g, (_, slot: string) => {
+    return colors[(colorIndex + Number(slot)) % colors.length];
+  });
 }
 
 function createRandom(seed: number) {
@@ -283,14 +330,16 @@ function distance(
 export function buildInstances(
   motifs: Motif[],
   activeIds: string[],
-  settings: StudioSettings,
-): PatternInstance[] {
+  settings: LayoutSettings,
+): LayoutInstance[] {
   const active = motifs.filter((motif) => activeIds.includes(motif.id));
   if (!active.length) return [];
-  const palette = resolvePalette(settings);
-  const random = createRandom(settings.seed);
-  const result: PatternInstance[] = [];
-  const toroidal = settings.outputMode === "repeat";
+  const assignmentRandom = createRandom(settings.seed ^ 0x51f15e);
+  const scaleRandom = createRandom(settings.seed ^ 0x91e10d);
+  const positionRandom = createRandom(settings.seed ^ 0x7214ab);
+  const rotationRandom = createRandom(settings.seed ^ 0x3c6ef3);
+  const result: LayoutInstance[] = [];
+  const toroidal = settings.surfaceMode === "repeat";
 
   if (settings.layoutMode === "grid") {
     const columns = Math.max(1, Math.min(settings.columns, settings.targetCount));
@@ -303,7 +352,7 @@ export function buildInstances(
       const row = Math.floor(index / columns);
       const column = index % columns;
       const motif = active[index % active.length];
-      const variation = 0.88 + random() * 0.2;
+      const variation = 0.88 + scaleRandom() * 0.2;
       const scale = Math.max(0.18, baseScale * variation);
       result.push({
         id: `grid-${index}`,
@@ -312,8 +361,8 @@ export function buildInstances(
         y: (row + 0.5) * cellHeight,
         scale,
         rotation: settings.rotation ? (index % 2 ? settings.rotation * 0.35 : -settings.rotation * 0.35) : 0,
-        color: palette.colors[index % palette.colors.length],
-        radius: 43 * scale,
+        colorIndex: index,
+        radius: (motif.collisionRadius ?? 43) * scale,
       });
     }
     return result;
@@ -321,16 +370,16 @@ export function buildInstances(
 
   const target = Math.max(1, Math.min(settings.targetCount, 160));
   for (let index = 0; index < target; index += 1) {
+    const motif = active[Math.floor(assignmentRandom() * active.length) % active.length];
+    const scale = settings.scaleMin + scaleRandom() * Math.max(0, settings.scaleMax - settings.scaleMin);
+    const radius = (motif.collisionRadius ?? 37) * scale;
     let placed = false;
     for (let attempt = 0; attempt < 42 && !placed; attempt += 1) {
-      const motif = active[Math.floor(random() * active.length) % active.length];
-      const scale = settings.scaleMin + random() * Math.max(0, settings.scaleMax - settings.scaleMin);
-      const radius = 37 * scale;
       const marginX = toroidal ? 0 : Math.min(radius, settings.width * 0.18);
       const marginY = toroidal ? 0 : Math.min(radius, settings.height * 0.18);
       const candidate = {
-        x: marginX + random() * Math.max(1, settings.width - marginX * 2),
-        y: marginY + random() * Math.max(1, settings.height - marginY * 2),
+        x: marginX + positionRandom() * Math.max(1, settings.width - marginX * 2),
+        y: marginY + positionRandom() * Math.max(1, settings.height - marginY * 2),
       };
       const overlaps = result.some((existing) => {
         const minimum = Math.max(settings.minDistance, 0) + (existing.radius + radius) * 0.5;
@@ -344,8 +393,8 @@ export function buildInstances(
           x: candidate.x,
           y: candidate.y,
           scale,
-          rotation: (random() * 2 - 1) * settings.rotation,
-          color: palette.colors[Math.floor(random() * palette.colors.length) % palette.colors.length],
+          rotation: (rotationRandom() * 2 - 1) * settings.rotation,
+          colorIndex: Math.floor(assignmentRandom() * 100000),
           radius,
         });
         placed = true;
@@ -355,12 +404,22 @@ export function buildInstances(
   return result;
 }
 
-export function withWrapCopies(
-  instances: PatternInstance[],
+export function colorizeInstances(
+  instances: LayoutInstance[],
+  colors: string[],
+): PatternInstance[] {
+  return instances.map((instance) => ({
+    ...instance,
+    color: colors[instance.colorIndex % colors.length],
+  }));
+}
+
+export function withWrapCopies<T extends LayoutInstance>(
+  instances: T[],
   width: number,
   height: number,
-): PatternInstance[] {
-  const result: PatternInstance[] = [...instances];
+): T[] {
+  const result: T[] = [...instances];
   for (const instance of instances) {
     const xOffsets = [0];
     const yOffsets = [0];
@@ -404,7 +463,7 @@ export function exportFlattenedSvg(
   settings: StudioSettings,
 ) {
   const palette = resolvePalette(settings);
-  const scene = settings.outputMode === "repeat"
+  const scene = settings.surfaceMode === "repeat"
     ? withWrapCopies(instances, settings.width, settings.height)
     : instances;
   const motifMap = new Map(motifs.map((motif) => [motif.id, motif]));
@@ -413,7 +472,8 @@ export function exportFlattenedSvg(
       const motif = motifMap.get(instance.motifId);
       if (!motif) return "";
       const transform = `translate(${instance.x.toFixed(3)} ${instance.y.toFixed(3)}) rotate(${instance.rotation.toFixed(3)}) scale(${instance.scale.toFixed(4)}) translate(-50 -50)`;
-      return `<g color="${escapeXml(instance.color)}" transform="${transform}">${motif.body}</g>`;
+      const body = resolveMotifBody(motif, palette.colors, instance.colorIndex);
+      return `<g color="${escapeXml(instance.color)}" transform="${transform}">${body}</g>`;
     })
     .join("");
 

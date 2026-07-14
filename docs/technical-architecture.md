@@ -217,6 +217,11 @@ type Composition = {
   width: number
   height: number
   origin: Vec2
+  bounds: {
+    geometry: Bounds
+    visual: Bounds
+    collision: Bounds
+  }
   children: Array<{
     id: ID
     assetId: ID
@@ -228,18 +233,23 @@ type Composition = {
 }
 ```
 
-Compose 只保存素材引用与相对变换，不破坏原始路径。
+Compose 只保存素材引用、颜色槽位关系与相对变换，不破坏原始路径。保存或更新 Composition 时，用全部可见子素材变换后的边界计算联合 Bounds；Arrange 使用组合的 collision Bounds，而不是任意单个子素材的尺寸。
 
 ### 6.4 实例与图样
 
 ```ts
-type SceneInstance = {
+type LayoutInstance = {
   id: ID
   motifRef: ID
   transform: Matrix2D
-  colorMap?: Record<string, string>
+  colorIndex: number
+  collisionRadius: number
   sourceIndex: number
   wrappedFrom?: ID
+}
+
+type StyledInstance = LayoutInstance & {
+  colorMap: Record<string, string>
 }
 
 type EvaluatedScene = {
@@ -247,12 +257,12 @@ type EvaluatedScene = {
     width: number
     height: number
   }
-  instances: SceneInstance[]
+  instances: LayoutInstance[]
   seed: number
   warnings: PatternWarning[]
 }
 
-type OutputSettings =
+type SurfaceSettings =
   | {
       mode: 'artboard'
       width: number
@@ -271,7 +281,7 @@ type OutputSettings =
     }
 ```
 
-Arrange 始终输出有限的 `EvaluatedScene`。只有 Output 为 `repeat` 时才调用 Wrap、环面碰撞检查和 Seam Check；Artboard 不产生环绕副本。
+Surface 是项目级计算上下文，不属于 Output 节点。Arrange 始终输出不含最终颜色的 `EvaluatedScene`；`repeat` Surface 在 Arrange 阶段启用环面碰撞，并在预览/导出时生成 Wrap 副本。Colorway 只把 `LayoutInstance` 映射为 `StyledInstance`，不得改变 Transform 或 Motif 分配。
 
 内部坐标使用当前文档单位的 SVG user units，导出时 `viewBox` 数值与文档宽高一致。切换 px/mm 默认按 CSS 96 px/in 换算以保持物理尺寸，并作为一次可撤销操作同时转换尺寸、间距和实例变换；不允许只改单位标签。
 
@@ -342,9 +352,9 @@ Input → Compose? → Arrange → Colorway → Output
 |---|---|---|---|
 | Input | 资产引用 | Motif Set | 否 |
 | Compose | Motif Set | Motif / Motif Set | 是 |
-| Arrange | Motif Set + Bounds | Scene | 否 |
-| Colorway | Scene + Palette | Scene | 是 |
-| Output | Scene | Artboard / Pattern | 否 |
+| Arrange | Motif Set + Bounds + Surface | Layout Scene | 否 |
+| Colorway | Layout Scene + Palette | Styled Scene | 是 |
+| Output | Styled Scene + Export Settings | SVG | 否 |
 
 Normalize 是 Input 内部步骤，不作为默认可见节点。
 
@@ -405,7 +415,7 @@ type EvalContext = {
 
 参数拖动期间只提交最新任务。每个 Worker 任务包含递增 `jobId`；UI 丢弃过期结果。长计算必须支持分块检查取消标记，无法协作取消时终止并重建专用 Worker，不能只依赖无法中断同步循环的 `AbortSignal`。
 
-`domain` 是项目级计算上下文：Artboard 使用 `finite`，Repeat 使用 `toroidal`。Output Mode 改变时必须使 Arrange 及其下游缓存失效，不能把 Wrap 仅当作最后一步视觉复制。
+`domain` 是项目级 Surface Context：Artboard 使用 `finite`，Tile 使用 `toroidal`。Surface 改变时必须使 Arrange 及其下游缓存失效，不能把 Wrap 仅当作最后一步视觉复制。
 
 ## 8. SVG 导入与 Normalize
 
@@ -505,7 +515,7 @@ Compose 支持：
 
 Compose 的输出仍为结构化引用；预览和导出时才展开为 SVG `<g>`。
 
-`appendToSet` 是产品默认值。Compose 必须按输入 ID 明确记录哪些 Motif 被消费、哪些被透传，不能依赖数组位置隐式判断。
+`replaceSelected` 是产品默认值。Compose 必须按输入 ID 明确记录哪些 Motif 被消费、哪些被透传，不能依赖数组位置隐式判断；上游素材失效时不得静默用其他素材补位。
 
 ## 10. Arrange Engine
 
@@ -526,7 +536,7 @@ type ArrangeInput = {
   }
 }
 
-type ArrangeOutput = SceneInstance[]
+type ArrangeOutput = LayoutInstance[]
 ```
 
 ### 10.2 Scatter 模式
@@ -576,7 +586,7 @@ type ArrayParams = {
 }
 ```
 
-Array 负责在当前 Scene Bounds 中生成位置并分配素材。`offsetRows` 和 `offsetColumns` 只描述画板或 Tile 内部的阵列错位；Square、Brick、Half Drop 等最终重复结构由 Output 定义。未来可以将 Position 和 Assign 拆成独立节点，但 MVP 不暴露这一层。
+Array 负责在当前 Scene Bounds 中生成位置并分配素材。`offsetRows` 和 `offsetColumns` 只描述画板或 Tile 内部的阵列错位；Square、Brick、Half Drop 等重复结构由 Surface Context 定义，Output 只负责交付。未来可以将 Position 和 Assign 拆成独立节点，但 MVP 不暴露这一层。
 
 ### 10.4 确定性
 
@@ -588,7 +598,7 @@ Node version
 + Parameters
 + Seed
 + Scene bounds
-+ Output mode；Repeat 模式下包含 Tile size 和 repeat structure
++ Surface Context；Tile 模式下包含 Tile size 和 repeat structure
 ```
 
 不得使用未注入的 `Math.random()`。
@@ -599,7 +609,7 @@ Normalize 得到的 geometry、visual 与 collision Bounds 写入项目文件。
 
 ## 11. 边缘环绕与无缝平铺
 
-本模块只在 Output Mode 为 `repeat` 时启用。Artboard 模式使用有限坐标空间，不创建显示副本，也不执行环面碰撞。
+本模块只在 Surface Context 为 `repeat` 时启用。Artboard 使用有限坐标空间，不创建显示副本，也不执行环面碰撞。
 
 Tile 坐标采用 `[0, width) × [0, height)`。
 
