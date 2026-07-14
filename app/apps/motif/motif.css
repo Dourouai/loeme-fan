@@ -62,7 +62,7 @@ input:focus-visible {
 }
 
 .motif-brand {
-  gap: 8px;
+  gap: 7px;
   font-size: 14px;
   font-weight: 620;
   letter-spacing: -0.02em;
@@ -74,19 +74,20 @@ input:focus-visible {
 
 .motif-brand-wordmark {
   display: block;
-  width: 76px;
+  width: 74px;
   height: auto;
 }
 
 .motif-brand-app-icon {
   display: block;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 7px;
 }
 
 .motif-brand-divider {
   color: #b6b5c0;
+  margin-inline: 1px;
 }
 
 .motif-project-title {
