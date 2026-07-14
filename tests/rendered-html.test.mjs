@@ -50,14 +50,17 @@ test("root route points to the Motif app", async () => {
 });
 
 test("removes the disposable starter and uses product metadata", async () => {
-  const [layout, packageJson] = await Promise.all([
+  const [layout, packageJson, motifCss] = await Promise.all([
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../app/apps/motif/motif.css", import.meta.url), "utf8"),
   ]);
 
   assert.match(layout, /Loeme Motif/);
   assert.match(layout, /lang="zh-CN"/);
   assert.doesNotMatch(layout, /Starter Project|codex-preview/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
+  assert.match(motifCss, /grid-template-columns:\s*auto minmax\(190px, 1fr\) auto auto/);
+  assert.match(motifCss, /height:\s*calc\(100vh - 64px\)/);
   await assert.rejects(access(new URL("../app/_sites-preview/SkeletonPreview.tsx", templateRoot)));
 });
