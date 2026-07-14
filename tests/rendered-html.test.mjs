@@ -34,10 +34,12 @@ test("server-renders the Loeme Motif workspace", async () => {
   const html = await response.text();
   assert.match(html, /<title>Motif — Parametric Vector Studio · Loeme<\/title>/i);
   assert.match(html, /Loeme/);
-  assert.match(html, /Seamless Preview/);
+  assert.match(html, /Arrangement Preview/);
   assert.match(html, /Vector flow/);
   assert.match(html, /Compose/);
   assert.match(html, /5-step recipe/);
+  assert.match(html, /How should motifs fill the canvas/);
+  assert.match(html, /New variation/);
   assert.match(html, /Starter/);
   assert.match(html, /Export SVG/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);

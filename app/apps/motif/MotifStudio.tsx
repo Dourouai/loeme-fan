@@ -20,9 +20,12 @@ import {
   buildInstances,
   exportFlattenedSvg,
   importSvgFile,
+  resolvePalette,
   withWrapCopies,
 } from "./motif-engine";
 import "./motif.css";
+
+type NodeId = "input" | "compose" | "arrange" | "colorway" | "output";
 
 type ProjectState = {
   name: string;
@@ -119,6 +122,18 @@ function MiniMotif({ motif, color = "#7c58e8" }: { motif: Motif; color?: string 
   );
 }
 
+function PalettePreview({ motifs, colors, background }: { motifs: Motif[]; colors: string[]; background: string }) {
+  return (
+    <span className="motif-palette-preview" style={{ background }} aria-hidden="true">
+      {motifs.slice(0, 5).map((motif, index) => (
+        <span key={motif.id}>
+          <MiniMotif motif={motif} color={colors[index % colors.length]} />
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function RangeField({
   label,
   value,
@@ -165,7 +180,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
   const [hydrated, setHydrated] = useState(false);
   const [saveState, setSaveState] = useState<"Saved" | "Saving">("Saved");
   const [libraryMode, setLibraryMode] = useState<"starter" | "project">("starter");
-  const [selectedNode, setSelectedNode] = useState<"input" | "compose" | "arrange" | "colorway" | "output">("arrange");
+  const [selectedNode, setSelectedNode] = useState<NodeId>("arrange");
   const [notice, setNotice] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const project = history.present;
@@ -207,7 +222,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
       : instances,
     [instances, settings.outputMode, settings.width, settings.height],
   );
-  const palette = PALETTES.find((item) => item.id === settings.paletteId) ?? PALETTES[0];
+  const palette = resolvePalette(settings);
 
   useEffect(() => {
     if (startFresh) {
@@ -354,6 +369,21 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
     updateSettings({ seed: values[0] || 1 });
   }
 
+  function updateScaleVariation(value: number) {
+    const center = (settings.scaleMin + settings.scaleMax) / 2;
+    const halfRange = value / 200;
+    updateSettings({
+      scaleMin: Math.max(0.2, Number((center - halfRange).toFixed(2))),
+      scaleMax: Math.min(1.8, Number((center + halfRange).toFixed(2))),
+    });
+  }
+
+  function updatePaletteColor(index: number, color: string) {
+    const colors = [...palette.colors];
+    colors[index] = color;
+    updateSettings({ paletteColors: colors });
+  }
+
   function downloadSvg() {
     if (!instances.length) {
       setNotice("当前没有可导出的图形。");
@@ -386,6 +416,22 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
     y: Math.floor(index / tiles) * settings.height,
     id: index,
   }));
+  const scaleVariation = Math.round((settings.scaleMax - settings.scaleMin) * 100);
+  const canvasTitle = selectedNode === "input"
+    ? "Selected Motifs Preview"
+    : selectedNode === "compose"
+      ? project.compose.enabled ? "Composition in Pattern" : "Composition Bypassed"
+      : selectedNode === "arrange"
+        ? "Arrangement Preview"
+        : selectedNode === "colorway"
+          ? "Colorway Preview"
+          : settings.outputMode === "repeat" ? "Seamless Preview" : "Artboard Preview";
+  const nextNode: Record<Exclude<NodeId, "output">, NodeId> = {
+    input: "compose",
+    compose: "arrange",
+    arrange: "colorway",
+    colorway: "output",
+  };
 
   return (
     <main className="motif-app">
@@ -498,8 +544,8 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
           <div className="motif-canvas-panel motif-panel">
             <div className="motif-canvas-header">
               <div>
-                <span className="motif-eyebrow">FINAL OUTPUT</span>
-                <h1>{settings.outputMode === "repeat" ? "Seamless Preview" : "Artboard Preview"}</h1>
+                <span className="motif-eyebrow">{selectedNode.toUpperCase()} · LIVE PREVIEW</span>
+                <h1>{canvasTitle}</h1>
               </div>
               <div className="motif-canvas-status">
                 <span className="motif-live-dot" /> Live
@@ -622,10 +668,22 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
           {selectedNode === "compose" && (
             <>
               <div className="motif-inspector-section">
+                <div className="motif-config-intro">
+                  <span>OPTIONAL STEP</span>
+                  <strong>Build one reusable motif</strong>
+                  <p>Choose a few parts, pick a starting composition, then send the result into Arrange.</p>
+                </div>
+                <div className="motif-compose-preview" aria-label="Composition preview">
+                  {compositionPreview ? <MiniMotif motif={compositionPreview} color={palette.colors[0]} /> : <span>Select two motifs</span>}
+                  <div>
+                    <strong>{project.compose.layout[0].toUpperCase() + project.compose.layout.slice(1)}</strong>
+                    <small>{resolvedComposeIds.length} motifs · paths preserved</small>
+                  </div>
+                </div>
                 <div className="motif-compose-toggle">
                   <div>
-                    <strong>Combine before Arrange</strong>
-                    <small>Optional · defaults to bypass</small>
+                    <strong>Use this composition</strong>
+                    <small>{project.compose.enabled ? "Included in Arrange" : "Currently bypassed"}</small>
                   </div>
                   <button
                     role="switch"
@@ -636,18 +694,10 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                     <span />{project.compose.enabled ? "On" : "Bypass"}
                   </button>
                 </div>
-                <p className="motif-section-copy motif-compose-copy">Select 2–3 motifs and turn them into one reusable composition. Arrange then treats it as a single vector unit.</p>
-                <div className="motif-compose-preview" aria-label="Composition preview">
-                  {compositionPreview ? <MiniMotif motif={compositionPreview} color={palette.colors[0]} /> : <span>Select two motifs</span>}
-                  <div>
-                    <strong>{project.compose.layout[0].toUpperCase() + project.compose.layout.slice(1)}</strong>
-                    <small>{resolvedComposeIds.length} motifs · paths preserved</small>
-                  </div>
-                </div>
               </div>
 
               <div className="motif-inspector-section">
-                <span className="motif-section-label">Motifs in composition</span>
+                <span className="motif-step-label"><b>1</b> Choose 2–3 parts</span>
                 <div className="motif-compose-motifs">
                   {project.activeIds.map((id, index) => {
                     const motif = motifMap.get(id);
@@ -670,7 +720,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
               </div>
 
               <div className="motif-inspector-section">
-                <span className="motif-section-label">Composition layout</span>
+                <span className="motif-step-label"><b>2</b> Choose a starting layout</span>
                 <div className="motif-layout-options">
                   {(["bouquet", "stack", "orbit"] as const).map((layout) => (
                     <button
@@ -684,7 +734,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                     </button>
                   ))}
                 </div>
-                <span className="motif-section-label motif-compose-output-label">Send to Arrange</span>
+                <span className="motif-step-label motif-compose-output-label"><b>3</b> Send to Arrange</span>
                 <div className="motif-segmented">
                   <button aria-pressed={project.compose.output === "append"} className={project.compose.output === "append" ? "is-active" : ""} onClick={() => updateCompose({ output: "append" })}>With originals</button>
                   <button aria-pressed={project.compose.output === "only"} className={project.compose.output === "only" ? "is-active" : ""} onClick={() => updateCompose({ output: "only" })}>Composition only</button>
@@ -696,10 +746,24 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
           {selectedNode === "arrange" && (
             <>
               <div className="motif-inspector-section">
-                <span className="motif-section-label">Layout</span>
-                <div className="motif-segmented">
-                  <button aria-pressed={settings.layoutMode === "scatter"} className={settings.layoutMode === "scatter" ? "is-active" : ""} onClick={() => updateSettings({ layoutMode: "scatter" })}>Scatter</button>
-                  <button aria-pressed={settings.layoutMode === "grid"} className={settings.layoutMode === "grid" ? "is-active" : ""} onClick={() => updateSettings({ layoutMode: "grid" })}>Grid</button>
+                <div className="motif-config-intro">
+                  <span>PLACEMENT</span>
+                  <strong>How should motifs fill the canvas?</strong>
+                  <p>Start with a visual layout mode. Fine-tune only the controls that change its character.</p>
+                </div>
+                <div className="motif-mode-grid">
+                  <button aria-pressed={settings.layoutMode === "scatter"} className={settings.layoutMode === "scatter" ? "is-active" : ""} onClick={() => updateSettings({ layoutMode: "scatter" })}>
+                    <span className="motif-mode-preview is-scatter"><i /><i /><i /><i /><i /><i /><i /></span>
+                    <strong>Scatter</strong>
+                    <small>Natural variation</small>
+                    <b>✓</b>
+                  </button>
+                  <button aria-pressed={settings.layoutMode === "grid"} className={settings.layoutMode === "grid" ? "is-active" : ""} onClick={() => updateSettings({ layoutMode: "grid" })}>
+                    <span className="motif-mode-preview is-grid"><i /><i /><i /><i /><i /><i /><i /><i /><i /></span>
+                    <strong>Grid</strong>
+                    <small>Ordered array</small>
+                    <b>✓</b>
+                  </button>
                 </div>
                 <div className="motif-placement-feedback">
                   <span><b>{instances.length}</b> / {settings.targetCount} placed</span>
@@ -707,64 +771,140 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                 </div>
               </div>
               <div className="motif-inspector-section">
-                <div className="motif-seed-row">
-                  <label>
-                    <span>Seed</span>
-                    <input
-                      type="number"
-                      value={settings.seed}
-                      onChange={(event) => updateSettings({ seed: Number(event.target.value) || 1 })}
-                    />
-                  </label>
-                  <button onClick={shuffleSeed}>Shuffle</button>
+                <div className="motif-section-heading">
+                  <div>
+                    <span className="motif-section-label">QUICK CONTROLS</span>
+                    <strong>Shape the layout</strong>
+                  </div>
+                  <button onClick={shuffleSeed}>New variation ↻</button>
                 </div>
-                <RangeField label="Count" value={settings.targetCount} min={4} max={96} onChange={(value) => updateSettings({ targetCount: value })} />
+                <RangeField label="Density" value={settings.targetCount} min={4} max={96} onChange={(value) => updateSettings({ targetCount: value })} />
                 {settings.layoutMode === "grid" ? (
                   <RangeField label="Columns" value={settings.columns} min={2} max={12} onChange={(value) => updateSettings({ columns: value })} />
                 ) : (
-                  <RangeField label="Min distance" value={settings.minDistance} min={0} max={28} suffix=" px" onChange={(value) => updateSettings({ minDistance: value })} />
+                  <RangeField label="Spacing" value={settings.minDistance} min={0} max={28} suffix=" px" onChange={(value) => updateSettings({ minDistance: value })} />
                 )}
-                <RangeField label="Min scale" value={settings.scaleMin} min={0.2} max={1.4} step={0.02} onChange={(value) => updateSettings({ scaleMin: Math.min(value, settings.scaleMax) })} />
-                <RangeField label="Max scale" value={settings.scaleMax} min={0.3} max={1.8} step={0.02} onChange={(value) => updateSettings({ scaleMax: Math.max(value, settings.scaleMin) })} />
-                <RangeField label="Rotation" value={settings.rotation} min={0} max={180} suffix="°" onChange={(value) => updateSettings({ rotation: value })} />
+                <RangeField label="Size variation" value={scaleVariation} min={0} max={100} suffix="%" onChange={updateScaleVariation} />
+                <RangeField label="Rotation variation" value={settings.rotation} min={0} max={180} suffix="°" onChange={(value) => updateSettings({ rotation: value })} />
               </div>
+              <details className="motif-advanced-controls">
+                <summary><span>Advanced controls</span><small>Seed & exact scale</small></summary>
+                <div>
+                  <div className="motif-seed-row">
+                    <label>
+                      <span>Seed</span>
+                      <input
+                        type="number"
+                        value={settings.seed}
+                        onChange={(event) => updateSettings({ seed: Number(event.target.value) || 1 })}
+                      />
+                    </label>
+                    <button onClick={shuffleSeed}>Shuffle</button>
+                  </div>
+                  <RangeField label="Minimum scale" value={settings.scaleMin} min={0.2} max={1.4} step={0.02} onChange={(value) => updateSettings({ scaleMin: Math.min(value, settings.scaleMax) })} />
+                  <RangeField label="Maximum scale" value={settings.scaleMax} min={0.3} max={1.8} step={0.02} onChange={(value) => updateSettings({ scaleMax: Math.max(value, settings.scaleMin) })} />
+                </div>
+              </details>
             </>
           )}
 
           {selectedNode === "colorway" && (
-            <div className="motif-inspector-section">
-              <p className="motif-section-copy">Colorways recolor Loeme Starter motifs. Imported SVG solid colors are preserved.</p>
-              <div className="motif-palette-list">
-                {PALETTES.map((item) => (
-                  <button
-                    key={item.id}
-                    className={settings.paletteId === item.id ? "is-active" : ""}
-                    aria-pressed={settings.paletteId === item.id}
-                    onClick={() => updateSettings({ paletteId: item.id })}
-                  >
-                    <span className="motif-palette-swatches" style={{ background: item.background }}>
-                      {item.colors.slice(0, 4).map((color) => <i key={color} style={{ background: color }} />)}
-                    </span>
-                    <span>{item.name}</span>
-                    <b>{settings.paletteId === item.id ? "✓" : ""}</b>
-                  </button>
-                ))}
+            <>
+              <div className="motif-inspector-section">
+                <div className="motif-config-intro">
+                  <span>COLOR DIRECTION</span>
+                  <strong>Choose by looking, not guessing</strong>
+                  <p>Each preset previews the actual motifs. You can fine-tune individual colors afterwards.</p>
+                </div>
+                <div className="motif-palette-list">
+                  {PALETTES.map((item) => (
+                    <button
+                      key={item.id}
+                      className={settings.paletteId === item.id ? "is-active" : ""}
+                      aria-pressed={settings.paletteId === item.id}
+                      onClick={() => updateSettings({ paletteId: item.id, paletteColors: null, backgroundColor: null })}
+                    >
+                      <PalettePreview
+                        motifs={motifs.filter((motif) => project.activeIds.includes(motif.id))}
+                        colors={item.colors}
+                        background={item.background}
+                      />
+                      <span className="motif-palette-info">
+                        <strong>{item.name}</strong>
+                        <small>{item.colors.slice(0, 5).map((color) => <i key={color} style={{ background: color }} />)}</small>
+                      </span>
+                      <b>{settings.paletteId === item.id ? "✓" : ""}</b>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+
+              <div className="motif-inspector-section">
+                <div className="motif-section-heading">
+                  <div>
+                    <span className="motif-section-label">FINE TUNE</span>
+                    <strong>Color mapping</strong>
+                  </div>
+                  {(settings.paletteColors || settings.backgroundColor) && (
+                    <button onClick={() => updateSettings({ paletteColors: null, backgroundColor: null })}>Reset colors</button>
+                  )}
+                </div>
+                <div className="motif-color-map">
+                  <label>
+                    <span><i style={{ background: palette.background }} />Background</span>
+                    <input aria-label="Background color" type="color" value={palette.background} onChange={(event) => updateSettings({ backgroundColor: event.target.value })} />
+                    <code>{palette.background.toUpperCase()}</code>
+                  </label>
+                  {palette.colors.slice(0, 5).map((color, index) => (
+                    <label key={`${index}-${color}`}>
+                      <span><i style={{ background: color }} />Color {index + 1}</span>
+                      <input aria-label={`Palette color ${index + 1}`} type="color" value={color} onChange={(event) => updatePaletteColor(index, event.target.value)} />
+                      <code>{color.toUpperCase()}</code>
+                    </label>
+                  ))}
+                </div>
+                <p className="motif-inline-note">Loeme motifs follow this mapping. Solid colors inside imported SVGs stay unchanged.</p>
+              </div>
+            </>
           )}
 
           {selectedNode === "output" && (
             <>
               <div className="motif-inspector-section">
-                <span className="motif-section-label">Output mode</span>
-                <div className="motif-segmented">
-                  <button aria-pressed={settings.outputMode === "artboard"} className={settings.outputMode === "artboard" ? "is-active" : ""} onClick={() => updateSettings({ outputMode: "artboard" })}>Artboard</button>
-                  <button aria-pressed={settings.outputMode === "repeat"} className={settings.outputMode === "repeat" ? "is-active" : ""} onClick={() => updateSettings({ outputMode: "repeat" })}>Repeat</button>
+                <div className="motif-config-intro">
+                  <span>DELIVERY</span>
+                  <strong>What are you exporting?</strong>
+                  <p>Choose an independent composition or a seamless tile. The preview updates before download.</p>
+                </div>
+                <div className="motif-output-modes">
+                  <button aria-pressed={settings.outputMode === "artboard"} className={settings.outputMode === "artboard" ? "is-active" : ""} onClick={() => updateSettings({ outputMode: "artboard" })}>
+                    <span className="motif-output-icon is-artboard"><i /></span>
+                    <strong>Artboard</strong>
+                    <small>One composition</small>
+                    <b>✓</b>
+                  </button>
+                  <button aria-pressed={settings.outputMode === "repeat"} className={settings.outputMode === "repeat" ? "is-active" : ""} onClick={() => updateSettings({ outputMode: "repeat" })}>
+                    <span className="motif-output-icon is-repeat"><i /><i /><i /><i /></span>
+                    <strong>Seamless tile</strong>
+                    <small>Edges wrapped</small>
+                    <b>✓</b>
+                  </button>
                 </div>
               </div>
-              <div className="motif-inspector-section motif-size-grid">
-                <label><span>Width</span><input type="number" min="240" max="1600" value={settings.width} onChange={(event) => updateSettings({ width: Math.max(240, Number(event.target.value)) })} /></label>
-                <label><span>Height</span><input type="number" min="180" max="1200" value={settings.height} onChange={(event) => updateSettings({ height: Math.max(180, Number(event.target.value)) })} /></label>
+              <div className="motif-inspector-section">
+                <span className="motif-section-label">CANVAS SIZE</span>
+                <div className="motif-size-presets">
+                  <button className={settings.width === 720 && settings.height === 720 ? "is-active" : ""} onClick={() => updateSettings({ width: 720, height: 720 })}><i className="is-square" />Square</button>
+                  <button className={settings.width === 720 && settings.height === 420 ? "is-active" : ""} onClick={() => updateSettings({ width: 720, height: 420 })}><i className="is-landscape" />Landscape</button>
+                  <button className={settings.width === 420 && settings.height === 720 ? "is-active" : ""} onClick={() => updateSettings({ width: 420, height: 720 })}><i className="is-portrait" />Portrait</button>
+                </div>
+                <div className="motif-size-grid">
+                  <label><span>Width</span><input type="number" min="240" max="1600" value={settings.width} onChange={(event) => updateSettings({ width: Math.max(240, Number(event.target.value)) })} /></label>
+                  <label><span>Height</span><input type="number" min="180" max="1200" value={settings.height} onChange={(event) => updateSettings({ height: Math.max(180, Number(event.target.value)) })} /></label>
+                </div>
+                <button className={`motif-boundary-toggle ${settings.showBoundary ? "is-active" : ""}`} role="switch" aria-checked={settings.showBoundary} onClick={() => updateSettings({ showBoundary: !settings.showBoundary })}>
+                  <span><i />Show tile boundary</span><b>{settings.showBoundary ? "On" : "Off"}</b>
+                </button>
               </div>
               {settings.outputMode === "repeat" && (
                 <div className="motif-repeat-note">
@@ -773,6 +913,14 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                   <p>Crossing motifs are copied to opposite edges and corners before export.</p>
                 </div>
               )}
+              <div className="motif-inspector-section">
+                <span className="motif-section-label">SVG READY CHECK</span>
+                <div className="motif-export-checks">
+                  <span><i>✓</i>Vector paths preserved</span>
+                  <span><i>✓</i>No embedded raster images</span>
+                  <span><i>✓</i>{settings.outputMode === "repeat" ? "Wrapped edge copies included" : "Artboard clipping applied"}</span>
+                </div>
+              </div>
             </>
           )}
           </div>
@@ -780,9 +928,13 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
           <div className="motif-inspector-footer">
             <div>
               <span>{instances.length}</span>
-              <small>instances ready</small>
+              <small>{selectedNode === "output" ? "instances ready" : `${selectedNode} result`}</small>
             </div>
-            <button onClick={downloadSvg}>Export flattened SVG <span>↗</span></button>
+            {selectedNode === "output" ? (
+              <button onClick={downloadSvg}>Export SVG <span>↗</span></button>
+            ) : (
+              <button onClick={() => setSelectedNode(nextNode[selectedNode])}>Continue to {nextNode[selectedNode][0].toUpperCase() + nextNode[selectedNode].slice(1)} <span>→</span></button>
+            )}
           </div>
         </aside>
       </section>

@@ -40,6 +40,8 @@ export type StudioSettings = {
   width: number;
   height: number;
   paletteId: string;
+  paletteColors: string[] | null;
+  backgroundColor: string | null;
   showBoundary: boolean;
 };
 
@@ -240,8 +242,19 @@ export const DEFAULT_SETTINGS: StudioSettings = {
   width: 720,
   height: 420,
   paletteId: "coastal",
+  paletteColors: null,
+  backgroundColor: null,
   showBoundary: true,
 };
+
+export function resolvePalette(settings: StudioSettings): Palette {
+  const preset = PALETTES.find((item) => item.id === settings.paletteId) ?? PALETTES[0];
+  return {
+    ...preset,
+    background: settings.backgroundColor ?? preset.background,
+    colors: settings.paletteColors?.length ? settings.paletteColors : preset.colors,
+  };
+}
 
 function createRandom(seed: number) {
   let state = seed >>> 0;
@@ -274,7 +287,7 @@ export function buildInstances(
 ): PatternInstance[] {
   const active = motifs.filter((motif) => activeIds.includes(motif.id));
   if (!active.length) return [];
-  const palette = PALETTES.find((item) => item.id === settings.paletteId) ?? PALETTES[0];
+  const palette = resolvePalette(settings);
   const random = createRandom(settings.seed);
   const result: PatternInstance[] = [];
   const toroidal = settings.outputMode === "repeat";
@@ -390,7 +403,7 @@ export function exportFlattenedSvg(
   instances: PatternInstance[],
   settings: StudioSettings,
 ) {
-  const palette = PALETTES.find((item) => item.id === settings.paletteId) ?? PALETTES[0];
+  const palette = resolvePalette(settings);
   const scene = settings.outputMode === "repeat"
     ? withWrapCopies(instances, settings.width, settings.height)
     : instances;
