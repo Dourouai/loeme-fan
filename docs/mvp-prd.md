@@ -151,11 +151,13 @@ Workspace
 
 ## 8. 默认工作流
 
-新项目不展示空白节点画布，系统创建完整的五步 Recipe；Compose 默认 Bypass，不阻断快速出图：
+新项目不展示空白节点画布，系统创建带类型的实时数据流；它不是必须按顺序完成的一次性向导。Compose 作为可选插槽默认 Bypass，不阻断快速出图：
 
 ```text
 Input → Compose → Arrange → Colorway → Output
 ```
+
+节点卡不显示步骤编号，而显示输入类型、输出类型、实时数量和状态。用户可以随时修改任一上游节点，所有下游结果自动重算。
 
 完整用户流程：
 
@@ -463,6 +465,8 @@ MVP 首批内置 24 个经过人工审核和预先 Normalize 的 Motif，分为 
 - 显示 Tile Boundary。
 - 显示中心 Tile。
 - 切换背景色。
+- 选中 Input 或 Compose 时，Canvas 直接展示该节点输出的 Motif Set，而不是最终图样。
+- 选中 Arrange 或 Colorway 时，Canvas 展示单 Scene；只有 Output 的 Repeat 模式展示多 Tile 最终预览。
 
 ### 12.2 Compose 编辑模式
 
@@ -521,7 +525,8 @@ MVP 首批内置 24 个经过人工审核和预先 Normalize 的 Motif，分为 
 - 每组提供 Reset。
 - 数值参数同时提供输入框和 Slider。
 - 参数修改实时更新 Canvas。
-- 除 Output 外，Inspector 底部主按钮进入下一节点；Output 才显示最终导出动作。
+- Inspector 顶部始终显示当前节点的 Input Type → Output Type。
+- 非 Output 节点底部提供“View final output”，不使用 Continue 按钮制造向导感；Output 显示最终导出动作。
 - 计算中显示轻量状态，不锁死其他面板。
 - 错误信息必须说明原因和恢复方式。
 
