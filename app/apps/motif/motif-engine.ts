@@ -11,7 +11,7 @@ export type Motif = {
 export type LayoutMode = "scatter" | "grid";
 export type OutputMode = "artboard" | "repeat";
 export type ComposeLayout = "bouquet" | "stack" | "orbit";
-export type ComposeOutput = "append" | "only";
+export type ComposeOutput = "replace" | "append" | "only";
 
 export type ComposeSettings = {
   enabled: boolean;

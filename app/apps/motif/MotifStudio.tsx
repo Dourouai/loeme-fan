@@ -47,13 +47,14 @@ type HistoryAction =
   | { type: "undo" }
   | { type: "redo" };
 
-const STORAGE_KEY = "loeme-motif-mvp-v1";
+const STORAGE_KEY = "loeme-motif-mvp-v2";
+const LEGACY_STORAGE_KEY = "loeme-motif-mvp-v1";
 
 const DEFAULT_COMPOSE: ComposeSettings = {
   enabled: false,
   selectedIds: ["bloom", "leaf", "sprig"],
   layout: "bouquet",
-  output: "append",
+  output: "replace",
 };
 
 const initialProject: ProjectState = {
@@ -204,13 +205,22 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
   );
   const arrangementActiveIds = useMemo(() => {
     if (!project.compose.enabled || !compositionPreview) return project.activeIds;
-    return project.compose.output === "only"
-      ? [compositionPreview.id]
-      : [...project.activeIds, compositionPreview.id];
-  }, [compositionPreview, project.activeIds, project.compose.enabled, project.compose.output]);
+    if (project.compose.output === "only") return [compositionPreview.id];
+    if (project.compose.output === "append") return [...project.activeIds, compositionPreview.id];
+    return [
+      ...project.activeIds.filter((id) => !resolvedComposeIds.includes(id)),
+      compositionPreview.id,
+    ];
+  }, [compositionPreview, project.activeIds, project.compose.enabled, project.compose.output, resolvedComposeIds]);
   const motifMap = useMemo(
     () => new Map(arrangementMotifs.map((motif) => [motif.id, motif])),
     [arrangementMotifs],
+  );
+  const arrangeInputMotifs = useMemo(
+    () => arrangementActiveIds
+      .map((id) => motifMap.get(id))
+      .filter((motif): motif is Motif => Boolean(motif)),
+    [arrangementActiveIds, motifMap],
   );
   const instances = useMemo(
     () => buildInstances(arrangementMotifs, arrangementActiveIds, settings),
@@ -227,13 +237,16 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
   useEffect(() => {
     if (startFresh) {
       window.localStorage.removeItem(STORAGE_KEY);
+      window.localStorage.removeItem(LEGACY_STORAGE_KEY);
       dispatch({ type: "load", next: initialProject });
       const freshTimer = window.setTimeout(() => setHydrated(true), 0);
       return () => window.clearTimeout(freshTimer);
     }
     let loadNotice = "";
     try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
+      const currentStored = window.localStorage.getItem(STORAGE_KEY);
+      const legacyStored = currentStored ? null : window.localStorage.getItem(LEGACY_STORAGE_KEY);
+      const stored = currentStored ?? legacyStored;
       if (stored) {
         const parsed = JSON.parse(stored) as ProjectState;
         if (parsed?.settings && Array.isArray(parsed.activeIds)) {
@@ -243,7 +256,11 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
               ...initialProject,
               ...parsed,
               settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
-              compose: { ...DEFAULT_COMPOSE, ...(parsed.compose ?? {}) },
+              compose: {
+                ...DEFAULT_COMPOSE,
+                ...(parsed.compose ?? {}),
+                output: legacyStored ? "replace" : (parsed.compose?.output ?? "replace"),
+              },
               importedMotifs: Array.isArray(parsed.importedMotifs) ? parsed.importedMotifs : [],
             },
           });
@@ -403,6 +420,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
   function resetProject() {
     if (!window.confirm("重置当前项目？本地修改和导入素材都会被清除。")) return;
     window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
     dispatch({ type: "load", next: initialProject });
     setNotice("项目已重置。");
   }
@@ -612,8 +630,8 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
             <div className="motif-recipe-flow">
               {([
                 ["input", "01", "Input", `${project.activeIds.length} motifs`],
-                ["compose", "02", "Compose", project.compose.enabled ? `${project.compose.layout} · ${resolvedComposeIds.length}` : "Bypassed"],
-                ["arrange", "03", "Arrange", settings.layoutMode === "scatter" ? "Scatter" : "Grid"],
+                ["compose", "02", "Compose", project.compose.enabled ? `${resolvedComposeIds.length} parts → ${arrangementActiveIds.length}` : "Bypassed"],
+                ["arrange", "03", "Arrange", `${settings.layoutMode === "scatter" ? "Scatter" : "Grid"} · ${arrangementActiveIds.length} in`],
                 ["colorway", "04", "Colorway", palette.name],
                 ["output", "05", "Output", settings.outputMode === "repeat" ? "Square repeat" : "Artboard"],
               ] as const).map((node, index) => (
@@ -735,9 +753,29 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                   ))}
                 </div>
                 <span className="motif-step-label motif-compose-output-label"><b>3</b> Send to Arrange</span>
-                <div className="motif-segmented">
-                  <button aria-pressed={project.compose.output === "append"} className={project.compose.output === "append" ? "is-active" : ""} onClick={() => updateCompose({ output: "append" })}>With originals</button>
-                  <button aria-pressed={project.compose.output === "only"} className={project.compose.output === "only" ? "is-active" : ""} onClick={() => updateCompose({ output: "only" })}>Composition only</button>
+                <div className="motif-output-strategy">
+                  <button aria-pressed={project.compose.output === "replace"} className={project.compose.output === "replace" ? "is-active" : ""} onClick={() => updateCompose({ output: "replace" })}>
+                    <strong>Replace selected</strong><small>Recommended · selected parts become one</small><i>✓</i>
+                  </button>
+                  <button aria-pressed={project.compose.output === "append"} className={project.compose.output === "append" ? "is-active" : ""} onClick={() => updateCompose({ output: "append" })}>
+                    <strong>Keep source parts</strong><small>Add composition without removing parts</small><i>✓</i>
+                  </button>
+                  <button aria-pressed={project.compose.output === "only"} className={project.compose.output === "only" ? "is-active" : ""} onClick={() => updateCompose({ output: "only" })}>
+                    <strong>Composition only</strong><small>Send only the new combined motif</small><i>✓</i>
+                  </button>
+                </div>
+                <div className="motif-node-output-tray">
+                  <div>
+                    <span>OUTPUT TO ARRANGE</span>
+                    <small>{project.compose.enabled ? `${arrangeInputMotifs.length} motifs` : "Bypassed · Input passes through"}</small>
+                  </div>
+                  <div className="motif-output-thumbnails">
+                    {arrangeInputMotifs.slice(0, 6).map((motif, index) => (
+                      <span key={motif.id} title={motif.name}><MiniMotif motif={motif} color={palette.colors[index % palette.colors.length]} /></span>
+                    ))}
+                    {arrangeInputMotifs.length > 6 && <b>+{arrangeInputMotifs.length - 6}</b>}
+                    <i aria-hidden="true">→</i>
+                  </div>
                 </div>
               </div>
             </>
@@ -749,7 +787,19 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                 <div className="motif-config-intro">
                   <span>PLACEMENT</span>
                   <strong>How should motifs fill the canvas?</strong>
-                  <p>Start with a visual layout mode. Fine-tune only the controls that change its character.</p>
+                  <p>Arrange uses the exact motif set produced by the previous node.</p>
+                </div>
+                <div className="motif-arrange-input">
+                  <div>
+                    <span>INPUT FROM {project.compose.enabled ? "COMPOSE" : "INPUT"}</span>
+                    <strong>{arrangeInputMotifs.length} motifs ready</strong>
+                  </div>
+                  <div>
+                    {arrangeInputMotifs.slice(0, 5).map((motif, index) => (
+                      <span key={motif.id}><MiniMotif motif={motif} color={palette.colors[index % palette.colors.length]} /></span>
+                    ))}
+                    {arrangeInputMotifs.length > 5 && <b>+{arrangeInputMotifs.length - 5}</b>}
+                  </div>
                 </div>
                 <div className="motif-mode-grid">
                   <button aria-pressed={settings.layoutMode === "scatter"} className={settings.layoutMode === "scatter" ? "is-active" : ""} onClick={() => updateSettings({ layoutMode: "scatter" })}>

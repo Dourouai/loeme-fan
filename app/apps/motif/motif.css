@@ -1008,6 +1008,158 @@ input:focus-visible {
   margin-top: 16px;
 }
 
+.motif-output-strategy {
+  display: grid;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.motif-output-strategy button {
+  position: relative;
+  min-height: 44px;
+  display: grid;
+  gap: 3px;
+  padding: 8px 28px 8px 10px;
+  border: 1px solid var(--motif-line);
+  border-radius: 9px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.motif-output-strategy button strong {
+  color: #55545f;
+  font-size: 8px;
+}
+
+.motif-output-strategy button small {
+  color: #9a98a3;
+  font-size: 7px;
+}
+
+.motif-output-strategy button > i {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  display: none;
+  transform: translateY(-50%);
+  color: #664fd1;
+  font-size: 9px;
+  font-style: normal;
+}
+
+.motif-output-strategy button.is-active {
+  border-color: #a597eb;
+  background: #faf8ff;
+}
+
+.motif-output-strategy button.is-active > i {
+  display: block;
+}
+
+.motif-node-output-tray {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid #ded9f5;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #fbfaff, #f4f1ff);
+}
+
+.motif-node-output-tray > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.motif-node-output-tray > div:first-child span {
+  color: #6e5cca;
+  font-size: 7px;
+  font-weight: 750;
+  letter-spacing: .1em;
+}
+
+.motif-node-output-tray > div:first-child small {
+  color: #9894a7;
+  font-size: 7px;
+}
+
+.motif-output-thumbnails {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.motif-output-thumbnails > span,
+.motif-arrange-input > div:last-child > span {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 3px;
+  border: 1px solid #e6e2f2;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.motif-output-thumbnails svg,
+.motif-arrange-input svg {
+  width: 100%;
+  height: 100%;
+}
+
+.motif-output-thumbnails > b,
+.motif-arrange-input > div:last-child > b {
+  color: #7566bd;
+  font-size: 7px;
+}
+
+.motif-output-thumbnails > i {
+  margin-left: auto;
+  color: #806cdd;
+  font-size: 13px;
+  font-style: normal;
+}
+
+.motif-arrange-input {
+  display: grid;
+  gap: 9px;
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid #e4e0f5;
+  border-radius: 10px;
+  background: #faf8ff;
+}
+
+.motif-arrange-input > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.motif-arrange-input > div:first-child span {
+  color: #8375c9;
+  font-size: 7px;
+  font-weight: 740;
+  letter-spacing: .08em;
+}
+
+.motif-arrange-input > div:first-child strong {
+  color: #5d596d;
+  font-size: 8px;
+}
+
+.motif-arrange-input > div:last-child {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.motif-arrange-input > div:last-child > span {
+  width: 30px;
+  height: 30px;
+}
+
 .motif-mode-grid,
 .motif-output-modes {
   display: grid;
