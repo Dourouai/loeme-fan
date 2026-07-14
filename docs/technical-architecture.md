@@ -565,7 +565,16 @@ type ScatterParams = {
 6. 使用空间哈希进行邻域碰撞查询；仅当 `boundary = toroidal` 时，边界附近实例同时查询对侧虚拟邻居。
 7. 达到最大尝试次数后停止并返回未满足密度警告。
 
-MVP 碰撞先使用圆形或 AABB 近似，不做精确路径碰撞。因此产品文案使用 `Reduce Overlap`，不能承诺完全避免重叠。
+空间哈希的 Cell Size 根据最大碰撞半径与最小间距计算。候选只查询覆盖 `candidateRadius + maxRadius + minDistance` 的邻近 Cell；Toroidal 模式对 Cell 索引取模并按环面距离复核，避免只复制视觉副本而漏检对侧碰撞。
+
+Classic Organic 对每个实例接受第一个有效候选。Dense Organic 使用以下稳定流程：
+
+1. 按碰撞半径从大到小处理请求，相同半径按原始索引排序。
+2. 为每个请求采样多个候选，并以最近邻净空距离评分，优先选择覆盖空白区域的有效候选。
+3. 对未放置请求使用最小碰撞 Motif 与最小 Scale 做恢复性补位，并选择能够安全嵌入现有空隙的候选。
+4. 恢复后仍无法放置的请求不写入 Scene，返回 `capacity-limited`、`placedCount` 与 `unplacedCount`。
+
+MVP 碰撞使用圆形近似，不做精确路径碰撞；但不得强制接受圆形碰撞检测失败的候选。产品文案说明“圆形近似、无强制重叠”，不能宣称精确形状碰撞。
 
 实例数不能由一个未定义的 0–100 Density 隐式推导，否则更改画板尺寸或 Motif 会产生不可解释的结果。未来可以增加“按面积保持密度”，MVP 先保存明确的 `targetCount` 和实际成功放置数量。
 
@@ -588,6 +597,13 @@ type ArrayParams = {
 
 Array 负责在当前 Scene Bounds 中生成位置并分配素材。`offsetRows` 和 `offsetColumns` 只描述画板或 Tile 内部的阵列错位；Square、Brick、Half Drop 等重复结构由 Surface Context 定义，Output 只负责交付。未来可以将 Position 和 Assign 拆成独立节点，但 MVP 不暴露这一层。
 
+Grid Assignment 规则：
+
+- `sequence`：按输入 Motif 顺序循环。
+- `alternate`：使用前两个 Motif 按行列奇偶形成棋盘交替。
+- `weighted`：使用项目保存的 Motif Weight 和独立随机流逐 Cell 抽取。
+- Row / Column Offset 使用半个 Cell，并将坐标规范化回当前 Surface。
+
 ### 10.4 确定性
 
 以下值共同决定计算结果：
@@ -604,6 +620,8 @@ Node version
 不得使用未注入的 `Math.random()`。
 
 MVP 固定使用一个明确版本的 32-bit PRNG，并将 `algorithmVersion` 写入 Arrange 节点数据。所有随机调用必须按稳定顺序消费；坐标、角度和缩放在进入输出前按约定精度舍入。算法升级时增加版本，不静默改变旧项目结果。
+
+当前实现写入 `algorithmVersion: 2`。从未带版本字段的早期本地项目迁移时，界面明确提示 Arrange 将按 v2 重新计算；后续正式项目格式应保留旧 Engine 执行器或提供用户确认的升级动作。
 
 Normalize 得到的 geometry、visual 与 collision Bounds 写入项目文件。后续布局不得在每次打开项目时重新依赖浏览器 `getBBox()` 计算，否则不同浏览器可能产生细微布局漂移。
 

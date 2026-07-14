@@ -41,6 +41,8 @@ test("server-renders the Loeme Motif workspace", async () => {
   assert.match(html, /How should motifs fill the canvas/);
   assert.match(html, /exact motif set produced by the previous node/);
   assert.match(html, /New variation/);
+  assert.match(html, /Dense/);
+  assert.match(html, /No forced overlaps/);
   assert.match(html, /Starter/);
   assert.match(html, /Export Final SVG/);
   assert.match(html, /VIEWING/);
@@ -75,9 +77,17 @@ test("removes the disposable starter and uses product metadata", async () => {
   assert.match(studioSource, /filter\(\(id\) => !resolvedComposeIds\.includes\(id\)\)/);
   assert.match(studioSource, /viewedNode/);
   assert.match(studioSource, /colorizeInstances\(layoutInstances, palette\.colors\)/);
+  assert.match(studioSource, /GRID OFFSET/);
+  assert.match(studioSource, /ASSIGNMENT/);
+  assert.match(studioSource, /capacity-limited/);
   assert.match(engineSource, /surfaceMode: SurfaceMode/);
   assert.match(engineSource, /__LOEME_SLOT_/);
   assert.match(engineSource, /collisionRadius/);
+  assert.match(engineSource, /class SpatialHash/);
+  assert.match(engineSource, /organicStrategy === "dense"/);
+  assert.match(engineSource, /gridAssignment === "weighted"/);
+  assert.match(engineSource, /capacity-limited/);
+  assert.doesNotMatch(engineSource, /attempt > 36/);
   assert.doesNotMatch(engineSource, /outputMode:/);
   await assert.rejects(access(new URL("../app/_sites-preview/SkeletonPreview.tsx", templateRoot)));
 });

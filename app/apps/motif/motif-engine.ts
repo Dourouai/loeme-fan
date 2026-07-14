@@ -14,6 +14,9 @@ export type MotifBounds = { x: number; y: number; width: number; height: number 
 
 export type LayoutMode = "scatter" | "grid";
 export type SurfaceMode = "artboard" | "repeat";
+export type OrganicStrategy = "classic" | "dense";
+export type GridOffset = "none" | "row" | "column";
+export type GridAssignment = "sequence" | "alternate" | "weighted";
 export type ComposeLayout = "bouquet" | "stack" | "orbit";
 export type ComposeOutput = "replace" | "append" | "only";
 
@@ -32,11 +35,16 @@ export type Palette = {
 };
 
 export type StudioSettings = {
+  algorithmVersion: number;
   layoutMode: LayoutMode;
   surfaceMode: SurfaceMode;
   seed: number;
   targetCount: number;
   columns: number;
+  organicStrategy: OrganicStrategy;
+  gridOffset: GridOffset;
+  gridAssignment: GridAssignment;
+  motifWeights: Record<string, number>;
   minDistance: number;
   scaleMin: number;
   scaleMax: number;
@@ -50,11 +58,16 @@ export type StudioSettings = {
 };
 
 export type LayoutSettings = Pick<StudioSettings,
+  | "algorithmVersion"
   | "layoutMode"
   | "surfaceMode"
   | "seed"
   | "targetCount"
   | "columns"
+  | "organicStrategy"
+  | "gridOffset"
+  | "gridAssignment"
+  | "motifWeights"
   | "minDistance"
   | "scaleMin"
   | "scaleMax"
@@ -76,6 +89,14 @@ export type LayoutInstance = {
 };
 
 export type PatternInstance = LayoutInstance & { color: string };
+
+export type LayoutResult = {
+  instances: LayoutInstance[];
+  requestedCount: number;
+  placedCount: number;
+  unplacedCount: number;
+  status: "complete" | "capacity-limited";
+};
 
 export const PALETTES: Palette[] = [
   {
@@ -270,11 +291,16 @@ export function buildCompositionMotif(
 }
 
 export const DEFAULT_SETTINGS: StudioSettings = {
+  algorithmVersion: 2,
   layoutMode: "scatter",
   surfaceMode: "repeat",
   seed: 42719,
   targetCount: 34,
   columns: 7,
+  organicStrategy: "dense",
+  gridOffset: "none",
+  gridAssignment: "sequence",
+  motifWeights: {},
   minDistance: 4,
   scaleMin: 0.54,
   scaleMax: 1.05,
@@ -327,81 +353,276 @@ function distance(
   return Math.hypot(dx, dy);
 }
 
+class SpatialHash {
+  private readonly buckets = new Map<string, LayoutInstance[]>();
+  private readonly columns: number;
+  private readonly rows: number;
+  private readonly cellSize: number;
+  private readonly width: number;
+  private readonly height: number;
+  private readonly toroidal: boolean;
+
+  constructor(
+    cellSize: number,
+    width: number,
+    height: number,
+    toroidal: boolean,
+  ) {
+    this.cellSize = cellSize;
+    this.width = width;
+    this.height = height;
+    this.toroidal = toroidal;
+    this.columns = Math.max(1, Math.ceil(width / cellSize));
+    this.rows = Math.max(1, Math.ceil(height / cellSize));
+  }
+
+  private normalize(value: number, limit: number) {
+    return ((value % limit) + limit) % limit;
+  }
+
+  private key(column: number, row: number) {
+    return `${column}:${row}`;
+  }
+
+  insert(instance: LayoutInstance) {
+    const column = Math.min(this.columns - 1, Math.max(0, Math.floor(instance.x / this.cellSize)));
+    const row = Math.min(this.rows - 1, Math.max(0, Math.floor(instance.y / this.cellSize)));
+    const key = this.key(column, row);
+    const bucket = this.buckets.get(key) ?? [];
+    bucket.push(instance);
+    this.buckets.set(key, bucket);
+  }
+
+  query(x: number, y: number, radius: number) {
+    const centerColumn = Math.floor(x / this.cellSize);
+    const centerRow = Math.floor(y / this.cellSize);
+    const range = Math.max(1, Math.ceil(radius / this.cellSize));
+    const seen = new Set<string>();
+    const result: LayoutInstance[] = [];
+
+    for (let columnOffset = -range; columnOffset <= range; columnOffset += 1) {
+      for (let rowOffset = -range; rowOffset <= range; rowOffset += 1) {
+        let column = centerColumn + columnOffset;
+        let row = centerRow + rowOffset;
+        if (this.toroidal) {
+          column = this.normalize(column, this.columns);
+          row = this.normalize(row, this.rows);
+        } else if (column < 0 || row < 0 || column >= this.columns || row >= this.rows) {
+          continue;
+        }
+        for (const instance of this.buckets.get(this.key(column, row)) ?? []) {
+          if (seen.has(instance.id)) continue;
+          seen.add(instance.id);
+          result.push(instance);
+        }
+      }
+    }
+    return result;
+  }
+}
+
+type PlacementRequest = {
+  sourceIndex: number;
+  motif: Motif;
+  scale: number;
+  radius: number;
+  rotation: number;
+  colorIndex: number;
+};
+
+function weightedMotif(motifs: Motif[], weights: Record<string, number>, random: () => number) {
+  const resolved = motifs.map((motif) => Math.max(0.01, weights[motif.id] ?? 1));
+  const total = resolved.reduce((sum, weight) => sum + weight, 0);
+  let cursor = random() * total;
+  for (let index = 0; index < motifs.length; index += 1) {
+    cursor -= resolved[index];
+    if (cursor <= 0) return motifs[index];
+  }
+  return motifs.at(-1) ?? motifs[0];
+}
+
+function layoutResult(instances: LayoutInstance[], requestedCount: number): LayoutResult {
+  const unplacedCount = Math.max(0, requestedCount - instances.length);
+  return {
+    instances,
+    requestedCount,
+    placedCount: instances.length,
+    unplacedCount,
+    status: unplacedCount ? "capacity-limited" : "complete",
+  };
+}
+
+function positiveModulo(value: number, modulus: number) {
+  return ((value % modulus) + modulus) % modulus;
+}
+
 export function buildInstances(
   motifs: Motif[],
   activeIds: string[],
   settings: LayoutSettings,
-): LayoutInstance[] {
+): LayoutResult {
   const active = motifs.filter((motif) => activeIds.includes(motif.id));
-  if (!active.length) return [];
-  const assignmentRandom = createRandom(settings.seed ^ 0x51f15e);
-  const scaleRandom = createRandom(settings.seed ^ 0x91e10d);
-  const positionRandom = createRandom(settings.seed ^ 0x7214ab);
-  const rotationRandom = createRandom(settings.seed ^ 0x3c6ef3);
+  const target = Math.max(1, Math.min(settings.targetCount, 160));
+  if (!active.length) return layoutResult([], target);
+  const versionSalt = Math.imul(settings.algorithmVersion, 0x9e3779b1);
+  const assignmentRandom = createRandom(settings.seed ^ versionSalt ^ 0x51f15e);
+  const scaleRandom = createRandom(settings.seed ^ versionSalt ^ 0x91e10d);
+  const positionRandom = createRandom(settings.seed ^ versionSalt ^ 0x7214ab);
+  const rotationRandom = createRandom(settings.seed ^ versionSalt ^ 0x3c6ef3);
   const result: LayoutInstance[] = [];
   const toroidal = settings.surfaceMode === "repeat";
 
   if (settings.layoutMode === "grid") {
-    const columns = Math.max(1, Math.min(settings.columns, settings.targetCount));
-    const rows = Math.ceil(settings.targetCount / columns);
+    const columns = Math.max(1, Math.min(settings.columns, target));
+    const rows = Math.ceil(target / columns);
     const cellWidth = settings.width / columns;
     const cellHeight = settings.height / rows;
     const baseScale = Math.min(cellWidth, cellHeight) / 82;
 
-    for (let index = 0; index < settings.targetCount; index += 1) {
+    for (let index = 0; index < target; index += 1) {
       const row = Math.floor(index / columns);
       const column = index % columns;
-      const motif = active[index % active.length];
+      const motif = settings.gridAssignment === "weighted"
+        ? weightedMotif(active, settings.motifWeights, assignmentRandom)
+        : settings.gridAssignment === "alternate"
+          ? active[(row + column) % Math.min(2, active.length)]
+          : active[index % active.length];
       const variation = 0.88 + scaleRandom() * 0.2;
       const scale = Math.max(0.18, baseScale * variation);
+      const rowShift = settings.gridOffset === "row" && row % 2 ? cellWidth * 0.5 : 0;
+      const columnShift = settings.gridOffset === "column" && column % 2 ? cellHeight * 0.5 : 0;
       result.push({
         id: `grid-${index}`,
         motifId: motif.id,
-        x: (column + 0.5) * cellWidth,
-        y: (row + 0.5) * cellHeight,
+        x: positiveModulo((column + 0.5) * cellWidth + rowShift, settings.width),
+        y: positiveModulo((row + 0.5) * cellHeight + columnShift, settings.height),
         scale,
         rotation: settings.rotation ? (index % 2 ? settings.rotation * 0.35 : -settings.rotation * 0.35) : 0,
         colorIndex: index,
         radius: (motif.collisionRadius ?? 43) * scale,
       });
     }
-    return result;
+    return layoutResult(result, target);
   }
 
-  const target = Math.max(1, Math.min(settings.targetCount, 160));
+  const requests: PlacementRequest[] = [];
   for (let index = 0; index < target; index += 1) {
-    const motif = active[Math.floor(assignmentRandom() * active.length) % active.length];
+    const motif = weightedMotif(active, settings.motifWeights, assignmentRandom);
     const scale = settings.scaleMin + scaleRandom() * Math.max(0, settings.scaleMax - settings.scaleMin);
-    const radius = (motif.collisionRadius ?? 37) * scale;
-    let placed = false;
-    for (let attempt = 0; attempt < 42 && !placed; attempt += 1) {
-      const marginX = toroidal ? 0 : Math.min(radius, settings.width * 0.18);
-      const marginY = toroidal ? 0 : Math.min(radius, settings.height * 0.18);
-      const candidate = {
-        x: marginX + positionRandom() * Math.max(1, settings.width - marginX * 2),
-        y: marginY + positionRandom() * Math.max(1, settings.height - marginY * 2),
-      };
-      const overlaps = result.some((existing) => {
-        const minimum = Math.max(settings.minDistance, 0) + (existing.radius + radius) * 0.5;
-        return distance(candidate, existing, settings.width, settings.height, toroidal) < minimum;
-      });
+    requests.push({
+      sourceIndex: index,
+      motif,
+      scale,
+      radius: (motif.collisionRadius ?? 37) * scale,
+      rotation: (rotationRandom() * 2 - 1) * settings.rotation,
+      colorIndex: Math.floor(assignmentRandom() * 100000),
+    });
+  }
 
-      if (!overlaps || attempt > 36) {
-        result.push({
-          id: `scatter-${index}`,
-          motifId: motif.id,
-          x: candidate.x,
-          y: candidate.y,
-          scale,
-          rotation: (rotationRandom() * 2 - 1) * settings.rotation,
-          colorIndex: Math.floor(assignmentRandom() * 100000),
-          radius,
-        });
-        placed = true;
+  const orderedRequests = settings.organicStrategy === "dense"
+    ? [...requests].sort((a, b) => b.radius - a.radius || a.sourceIndex - b.sourceIndex)
+    : requests;
+  const maximumRadius = Math.max(...orderedRequests.map((request) => request.radius));
+  const hash = new SpatialHash(
+    Math.max(24, Math.min(96, maximumRadius + Math.max(0, settings.minDistance))),
+    settings.width,
+    settings.height,
+    toroidal,
+  );
+
+  const clearanceAt = (x: number, y: number, radius: number) => {
+    if (!toroidal && (x - radius < 0 || x + radius > settings.width || y - radius < 0 || y + radius > settings.height)) {
+      return Number.NEGATIVE_INFINITY;
+    }
+    const neighbors = hash.query(x, y, radius + maximumRadius + Math.max(0, settings.minDistance));
+    let clearance = Number.POSITIVE_INFINITY;
+    for (const existing of neighbors) {
+      const gap = distance({ x, y }, existing, settings.width, settings.height, toroidal)
+        - radius - existing.radius - Math.max(0, settings.minDistance);
+      clearance = Math.min(clearance, gap);
+      if (clearance < 0) return clearance;
+    }
+    return clearance;
+  };
+
+  const samplePosition = (radius: number) => {
+    const marginX = toroidal ? 0 : Math.min(radius, settings.width * 0.5);
+    const marginY = toroidal ? 0 : Math.min(radius, settings.height * 0.5);
+    return {
+      x: marginX + positionRandom() * Math.max(1, settings.width - marginX * 2),
+      y: marginY + positionRandom() * Math.max(1, settings.height - marginY * 2),
+    };
+  };
+
+  const accept = (request: PlacementRequest, position: { x: number; y: number }, id: string) => {
+    const instance: LayoutInstance = {
+      id,
+      motifId: request.motif.id,
+      x: position.x,
+      y: position.y,
+      scale: request.scale,
+      rotation: request.rotation,
+      colorIndex: request.colorIndex,
+      radius: request.radius,
+    };
+    result.push(instance);
+    hash.insert(instance);
+  };
+
+  let missed = 0;
+  for (const request of orderedRequests) {
+    const candidateCount = settings.organicStrategy === "dense" ? 32 : 48;
+    let bestPosition: { x: number; y: number } | null = null;
+    let bestClearance = Number.NEGATIVE_INFINITY;
+    for (let attempt = 0; attempt < candidateCount; attempt += 1) {
+      const candidate = samplePosition(request.radius);
+      const clearance = clearanceAt(candidate.x, candidate.y, request.radius);
+      if (clearance < 0) continue;
+      if (settings.organicStrategy === "classic") {
+        bestPosition = candidate;
+        break;
+      }
+      const score = Number.isFinite(clearance) ? clearance : maximumRadius * 4;
+      if (score > bestClearance) {
+        bestClearance = score;
+        bestPosition = candidate;
       }
     }
+    if (bestPosition) accept(request, bestPosition, `scatter-${request.sourceIndex}`);
+    else missed += 1;
   }
-  return result;
+
+  if (settings.organicStrategy === "dense" && missed > 0) {
+    const smallestMotif = [...active].sort(
+      (a, b) => (a.collisionRadius ?? 37) - (b.collisionRadius ?? 37),
+    )[0];
+    for (let index = 0; index < missed; index += 1) {
+      const scale = settings.scaleMin;
+      const radius = (smallestMotif.collisionRadius ?? 37) * scale;
+      let bestPosition: { x: number; y: number } | null = null;
+      let tightestClearance = Number.POSITIVE_INFINITY;
+      for (let attempt = 0; attempt < 96; attempt += 1) {
+        const candidate = samplePosition(radius);
+        const clearance = clearanceAt(candidate.x, candidate.y, radius);
+        if (clearance < 0) continue;
+        const score = Number.isFinite(clearance) ? clearance : maximumRadius * 4;
+        if (score < tightestClearance) {
+          tightestClearance = score;
+          bestPosition = candidate;
+        }
+      }
+      if (!bestPosition) continue;
+      accept({
+        sourceIndex: target + index,
+        motif: smallestMotif,
+        scale,
+        radius,
+        rotation: (rotationRandom() * 2 - 1) * settings.rotation,
+        colorIndex: Math.floor(assignmentRandom() * 100000),
+      }, bestPosition, `scatter-filler-${index}`);
+    }
+  }
+  return layoutResult(result, target);
 }
 
 export function colorizeInstances(

@@ -228,12 +228,17 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
     [arrangementActiveIds, motifMap],
   );
   const palette = resolvePalette(settings);
-  const layoutInstances = useMemo(
+  const layoutResult = useMemo(
     () => buildInstances(arrangementMotifs, arrangementActiveIds, {
+      algorithmVersion: settings.algorithmVersion,
       columns: settings.columns,
+      gridAssignment: settings.gridAssignment,
+      gridOffset: settings.gridOffset,
       height: settings.height,
       layoutMode: settings.layoutMode,
       minDistance: settings.minDistance,
+      motifWeights: settings.motifWeights,
+      organicStrategy: settings.organicStrategy,
       rotation: settings.rotation,
       scaleMax: settings.scaleMax,
       scaleMin: settings.scaleMin,
@@ -245,10 +250,15 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
     [
       arrangementActiveIds,
       arrangementMotifs,
+      settings.algorithmVersion,
       settings.columns,
+      settings.gridAssignment,
+      settings.gridOffset,
       settings.height,
       settings.layoutMode,
       settings.minDistance,
+      settings.motifWeights,
+      settings.organicStrategy,
       settings.rotation,
       settings.scaleMax,
       settings.scaleMin,
@@ -258,6 +268,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
       settings.width,
     ],
   );
+  const layoutInstances = layoutResult.instances;
   const instances = useMemo(
     () => colorizeInstances(layoutInstances, palette.colors),
     [layoutInstances, palette.colors],
@@ -286,6 +297,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
         const parsed = JSON.parse(stored) as ProjectState;
         if (parsed?.settings && Array.isArray(parsed.activeIds)) {
           const legacySettings = parsed.settings as StudioSettings & { outputMode?: "artboard" | "repeat" };
+          const upgradedArrange = typeof legacySettings.algorithmVersion !== "number";
           const { outputMode: legacyOutputMode, ...currentSettings } = legacySettings;
           dispatch({
             type: "load",
@@ -295,6 +307,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
               settings: {
                 ...DEFAULT_SETTINGS,
                 ...currentSettings,
+                algorithmVersion: legacySettings.algorithmVersion ?? DEFAULT_SETTINGS.algorithmVersion,
                 surfaceMode: legacySettings.surfaceMode ?? legacyOutputMode ?? DEFAULT_SETTINGS.surfaceMode,
               },
               compose: {
@@ -305,6 +318,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
               importedMotifs: Array.isArray(parsed.importedMotifs) ? parsed.importedMotifs : [],
             },
           });
+          if (upgradedArrange) loadNotice = "Arrange Engine 已升级到 v2；旧项目会使用新的无强制重叠布局重新计算。";
         }
       }
     } catch {
@@ -442,6 +456,15 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
     const colors = [...palette.colors];
     colors[index] = color;
     updateSettings({ paletteColors: colors });
+  }
+
+  function updateMotifWeight(id: string, weight: number) {
+    updateSettings({
+      motifWeights: {
+        ...settings.motifWeights,
+        [id]: Number(Math.max(0.25, Math.min(3, weight)).toFixed(2)),
+      },
+    });
   }
 
   function downloadSvg() {
@@ -899,8 +922,8 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                 <div className="motif-mode-grid">
                   <button aria-pressed={settings.layoutMode === "scatter"} className={settings.layoutMode === "scatter" ? "is-active" : ""} onClick={() => updateSettings({ layoutMode: "scatter" })}>
                     <span className="motif-mode-preview is-scatter"><i /><i /><i /><i /><i /><i /><i /></span>
-                    <strong>Scatter</strong>
-                    <small>Natural variation</small>
+                    <strong>Organic</strong>
+                    <small>Collision-aware fill</small>
                     <b>✓</b>
                   </button>
                   <button aria-pressed={settings.layoutMode === "grid"} className={settings.layoutMode === "grid" ? "is-active" : ""} onClick={() => updateSettings({ layoutMode: "grid" })}>
@@ -910,10 +933,54 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                     <b>✓</b>
                   </button>
                 </div>
-                <div className="motif-placement-feedback">
-                  <span><b>{instances.length}</b> / {settings.targetCount} placed</span>
-                  <small>{settings.layoutMode === "scatter" ? "Collision-aware placement" : `${settings.columns} column grid`}</small>
+                {settings.layoutMode === "scatter" ? (
+                  <div className="motif-arrange-choice">
+                    <span>ORGANIC FILL</span>
+                    <div>
+                      <button className={settings.organicStrategy === "classic" ? "is-active" : ""} aria-pressed={settings.organicStrategy === "classic"} onClick={() => updateSettings({ organicStrategy: "classic" })}>
+                        <strong>Classic</strong><small>First valid position</small>
+                      </button>
+                      <button className={settings.organicStrategy === "dense" ? "is-active" : ""} aria-pressed={settings.organicStrategy === "dense"} onClick={() => updateSettings({ organicStrategy: "dense" })}>
+                        <strong>Dense</strong><small>Score candidates + fillers</small>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="motif-arrange-choice">
+                      <span>GRID OFFSET</span>
+                      <div className="is-three">
+                        {(["none", "row", "column"] as const).map((offset) => (
+                          <button key={offset} className={settings.gridOffset === offset ? "is-active" : ""} aria-pressed={settings.gridOffset === offset} onClick={() => updateSettings({ gridOffset: offset })}>
+                            <strong>{offset === "none" ? "None" : offset === "row" ? "Rows ½" : "Columns ½"}</strong>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="motif-arrange-choice">
+                      <span>ASSIGNMENT</span>
+                      <div className="is-three">
+                        {(["sequence", "alternate", "weighted"] as const).map((assignment) => (
+                          <button key={assignment} className={settings.gridAssignment === assignment ? "is-active" : ""} aria-pressed={settings.gridAssignment === assignment} onClick={() => updateSettings({ gridAssignment: assignment })}>
+                            <strong>{assignment[0].toUpperCase() + assignment.slice(1)}</strong>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+                <div className={`motif-placement-feedback ${layoutResult.status === "capacity-limited" ? "is-warning" : ""}`}>
+                  <span><b>{layoutResult.placedCount}</b> / {layoutResult.requestedCount} placed</span>
+                  <small>{layoutResult.status === "capacity-limited"
+                    ? `${layoutResult.unplacedCount} could not fit`
+                    : settings.layoutMode === "scatter" ? "No forced overlaps" : `${settings.columns} column grid`}</small>
                 </div>
+                {layoutResult.status === "capacity-limited" && (
+                  <div className="motif-capacity-warning" role="status">
+                    <b>Canvas capacity reached</b>
+                    <span>Reduce Density, Spacing or motif size. Existing placements remain collision-safe.</span>
+                  </div>
+                )}
               </div>
               <div className="motif-inspector-section">
                 <div className="motif-section-heading">
@@ -933,7 +1000,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                 <RangeField label="Rotation variation" value={settings.rotation} min={0} max={180} suffix="°" onChange={(value) => updateSettings({ rotation: value })} />
               </div>
               <details className="motif-advanced-controls">
-                <summary><span>Advanced controls</span><small>Seed & exact scale</small></summary>
+                <summary><span>Advanced controls</span><small>Engine v{settings.algorithmVersion} · Seed & scale</small></summary>
                 <div>
                   <div className="motif-seed-row">
                     <label>
@@ -948,6 +1015,22 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                   </div>
                   <RangeField label="Minimum scale" value={settings.scaleMin} min={0.2} max={1.4} step={0.02} onChange={(value) => updateSettings({ scaleMin: Math.min(value, settings.scaleMax) })} />
                   <RangeField label="Maximum scale" value={settings.scaleMax} min={0.3} max={1.8} step={0.02} onChange={(value) => updateSettings({ scaleMax: Math.max(value, settings.scaleMin) })} />
+                  {(settings.layoutMode === "scatter" || settings.gridAssignment === "weighted") && (
+                    <div className="motif-weight-controls">
+                      <span className="motif-section-label">MOTIF WEIGHTS</span>
+                      <p>{settings.layoutMode === "scatter" ? "Controls organic frequency" : "Controls weighted cell assignment"}</p>
+                      {arrangeInputMotifs.map((motif) => {
+                        const weight = settings.motifWeights[motif.id] ?? 1;
+                        return (
+                          <label key={motif.id}>
+                            <span>{motif.name}</span>
+                            <input type="range" min="0.25" max="3" step="0.25" value={weight} onChange={(event) => updateMotifWeight(motif.id, Number(event.target.value))} />
+                            <output>{weight.toFixed(2)}×</output>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </details>
             </>
