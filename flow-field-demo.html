@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Loeme Flow — 流场图形编排器</title>
+  <style>
+    :root {
+      --ink: #191816;
+      --muted: #77736c;
+      --paper: #f5f0e7;
+      --panel: #e9e3d8;
+      --line: rgba(25, 24, 22, .16);
+      --acid: #c9ff45;
+      --orange: #ff623e;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body { margin: 0; overflow: hidden; color: var(--ink); background: #d7d1c7; }
+    button, input, select { font: inherit; }
+    button { color: inherit; }
+    .app { height: 100vh; display: grid; grid-template-rows: 58px minmax(0, 1fr) 34px; }
+    .topbar {
+      display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+      padding: 0 18px; border-bottom: 1px solid var(--line); background: rgba(245,240,231,.94);
+      backdrop-filter: blur(16px); z-index: 3;
+    }
+    .brand { font-size: 20px; font-weight: 850; letter-spacing: -.05em; }
+    .brand span { margin-left: 8px; font-weight: 430; color: var(--muted); }
+    .project { font-size: 13px; color: var(--muted); }
+    .actions { justify-self: end; display: flex; gap: 8px; }
+    .btn {
+      height: 34px; border: 1px solid var(--line); border-radius: 999px; padding: 0 15px;
+      background: rgba(255,255,255,.38); cursor: pointer; transition: .18s ease;
+    }
+    .btn:hover { transform: translateY(-1px); border-color: rgba(25,24,22,.42); }
+    .btn.primary { background: var(--ink); color: white; border-color: var(--ink); }
+    .btn.freeze.active { background: var(--acid); color: var(--ink); border-color: var(--ink); }
+    .workspace { min-height: 0; display: grid; grid-template-columns: 238px minmax(420px, 1fr) 258px; }
+    .sidebar { min-height: 0; overflow: auto; background: var(--paper); }
+    .sidebar.left { border-right: 1px solid var(--line); }
+    .sidebar.right { border-left: 1px solid var(--line); }
+    .section { padding: 18px; border-bottom: 1px solid var(--line); }
+    .label { margin-bottom: 12px; font-size: 10px; font-weight: 750; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+    .tools { display: grid; gap: 7px; }
+    .tool {
+      display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px;
+      width: 100%; padding: 8px; border: 1px solid transparent; border-radius: 9px;
+      background: transparent; text-align: left; cursor: pointer;
+    }
+    .tool:hover { background: rgba(0,0,0,.035); }
+    .tool.active { border-color: var(--ink); background: white; box-shadow: 0 3px 0 var(--ink); }
+    .tool-icon { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 50%; font-size: 18px; }
+    .tool strong { display: block; font-size: 13px; }
+    .tool small { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; }
+    .tool kbd { color: var(--muted); font: 10px ui-monospace, monospace; }
+    .field-list { display: grid; gap: 7px; }
+    .field-item { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 12px; }
+    .field-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--orange); }
+    .field-item span:nth-child(2) { flex: 1; }
+    .field-item button { border: 0; background: none; cursor: pointer; color: var(--muted); }
+    .empty { color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .stage { position: relative; min-width: 0; min-height: 0; padding: 24px; background: #d7d1c7; }
+    .canvas-wrap {
+      position: relative; width: 100%; height: 100%; overflow: hidden; background: #151b18;
+      border-radius: 3px; box-shadow: 0 20px 50px rgba(39,29,19,.22); cursor: crosshair;
+    }
+    canvas { display: block; width: 100%; height: 100%; }
+    .canvas-wrap.frozen { cursor: default; }
+    .canvas-wrap.frozen::after { content: "FROZEN"; position: absolute; top: 14px; right: 14px; padding: 6px 9px; border-radius: 999px; background: var(--acid); border: 1px solid var(--ink); font-size: 9px; font-weight: 850; letter-spacing: .14em; }
+    .hint { position: absolute; left: 50%; bottom: 40px; translate: -50% 0; pointer-events: none; padding: 8px 12px; border-radius: 999px; color: white; background: rgba(15,15,15,.6); backdrop-filter: blur(8px); font-size: 11px; transition: opacity .3s; }
+    .hint.hidden { opacity: 0; }
+    .gpu-note { position: absolute; inset: 0; display: none; place-items: center; padding: 40px; color: white; background: #151b18; text-align: center; line-height: 1.6; }
+    .gpu-note.show { display: grid; }
+    .field-guides { position: absolute; inset: 0; pointer-events: none; }
+    .field-guide { position: absolute; width: 54px; height: 54px; translate: -50% -50%; border: 1px solid rgba(255,255,255,.7); border-radius: 50%; color: white; }
+    .field-guide::before, .field-guide::after { content:""; position:absolute; left:50%; top:50%; background:currentColor; opacity:.8; }
+    .field-guide::before { width: 13px; height: 1px; translate:-50% -50%; }
+    .field-guide::after { width: 1px; height: 13px; translate:-50% -50%; }
+    .field-guide.vortex { border-style: dashed; animation: spin 8s linear infinite; }
+    .field-guide.attract { box-shadow: inset 0 0 0 8px rgba(201,255,69,.12); color: var(--acid); }
+    .field-guide.repel { box-shadow: 0 0 0 8px rgba(255,98,62,.10); color: var(--orange); }
+    @keyframes spin { to { rotate:360deg; } }
+    .control { margin-bottom: 18px; }
+    .control-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; font-size: 12px; }
+    .value { color: var(--muted); font: 11px ui-monospace, monospace; }
+    input[type="range"] { width: 100%; height: 3px; appearance: none; border-radius: 2px; background: rgba(25,24,22,.18); }
+    input[type="range"]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--ink); border: 3px solid var(--paper); box-shadow: 0 0 0 1px var(--ink); cursor: pointer; }
+    .palette-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+    .palette { height: 42px; display: flex; overflow: hidden; padding: 0; border: 1px solid transparent; border-radius: 7px; background: none; cursor: pointer; }
+    .palette.active { outline: 2px solid var(--ink); outline-offset: 2px; }
+    .palette i { flex: 1; }
+    .toggle-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+    .switch { width: 38px; height: 21px; position: relative; border: 0; border-radius: 999px; background: #b9b4ab; cursor: pointer; }
+    .switch::after { content:""; position:absolute; top:3px; left:3px; width:15px; height:15px; border-radius:50%; background:white; transition:.2s; }
+    .switch.active { background: var(--ink); }
+    .switch.active::after { translate: 17px 0; }
+    .footer { display: flex; justify-content: space-between; align-items: center; padding: 0 14px; border-top: 1px solid var(--line); background: var(--paper); color: var(--muted); font-size: 10px; }
+    .status { display: flex; gap: 18px; }
+    .live { color: #267d49; font-weight: 700; }
+    @media (max-width: 900px) {
+      .workspace { grid-template-columns: 180px minmax(320px,1fr); }
+      .sidebar.right { display: none; }
+      .project { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">loeme <span>/ flow</span></div>
+      <div class="project">Untitled composition · 1920 × 1080</div>
+      <div class="actions">
+        <button class="btn" id="shuffleBtn">Shuffle</button>
+        <button class="btn freeze" id="freezeBtn">Freeze</button>
+        <button class="btn primary" id="exportBtn">Export PNG</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="sidebar left">
+        <section class="section">
+          <div class="label">Field tools</div>
+          <div class="tools">
+            <button class="tool active" data-tool="vortex"><span class="tool-icon">↻</span><span><strong>Vortex</strong><small>旋转流场</small></span><kbd>V</kbd></button>
+            <button class="tool" data-tool="attract"><span class="tool-icon">⊙</span><span><strong>Attract</strong><small>聚集图形</small></span><kbd>A</kbd></button>
+            <button class="tool" data-tool="repel"><span class="tool-icon">↗</span><span><strong>Repel</strong><small>制造留白</small></span><kbd>R</kbd></button>
+          </div>
+        </section>
+        <section class="section">
+          <div class="label">Fields on canvas</div>
+          <div class="field-list" id="fieldList"></div>
+        </section>
+        <section class="section">
+          <div class="label">Quick recipes</div>
+          <div class="tools">
+            <button class="tool" data-recipe="orbit"><span class="tool-icon">◎</span><span><strong>Soft orbit</strong><small>柔和环流</small></span></button>
+            <button class="tool" data-recipe="burst"><span class="tool-icon">✦</span><span><strong>Type space</strong><small>中央留白</small></span></button>
+          </div>
+        </section>
+      </aside>
+
+      <section class="stage">
+        <div class="canvas-wrap" id="canvasWrap">
+          <canvas id="gpuCanvas"></canvas>
+          <div class="field-guides" id="fieldGuides"></div>
+          <div class="hint" id="hint">点击画布添加旋涡 · 拖动力场可移动</div>
+          <div class="gpu-note" id="gpuNote">这个实验需要支持 WebGPU 的现代浏览器。<br>请尝试最新版 Chrome、Edge 或 Safari。</div>
+        </div>
+      </section>
+
+      <aside class="sidebar right">
+        <section class="section">
+          <div class="label">Particles</div>
+          <div class="control"><div class="control-head"><span>数量</span><span class="value" id="countValue">12,000</span></div><input id="count" type="range" min="2000" max="30000" step="1000" value="12000"></div>
+          <div class="control"><div class="control-head"><span>图形尺寸</span><span class="value" id="sizeValue">1.00</span></div><input id="size" type="range" min="40" max="180" value="100"></div>
+          <div class="control"><div class="control-head"><span>流动速度</span><span class="value" id="speedValue">1.00</span></div><input id="speed" type="range" min="10" max="220" value="100"></div>
+          <div class="control"><div class="control-head"><span>自然扰动</span><span class="value" id="noiseValue">0.35</span></div><input id="noise" type="range" min="0" max="100" value="35"></div>
+        </section>
+        <section class="section">
+          <div class="label">Colorway</div>
+          <div class="palette-grid">
+            <button class="palette active" data-palette="0" aria-label="Forest"><i style="background:#c9ff45"></i><i style="background:#ff623e"></i><i style="background:#b699ff"></i></button>
+            <button class="palette" data-palette="1" aria-label="Sorbet"><i style="background:#ffb4c6"></i><i style="background:#ffe84d"></i><i style="background:#69d6c7"></i></button>
+            <button class="palette" data-palette="2" aria-label="Ink"><i style="background:#f3eee4"></i><i style="background:#8aacff"></i><i style="background:#fd744d"></i></button>
+          </div>
+        </section>
+        <section class="section">
+          <div class="label">Canvas</div>
+          <div class="toggle-row"><span>显示力场</span><button class="switch active" id="guidesBtn" aria-label="显示力场"></button></div>
+        </section>
+      </aside>
+    </main>
+
+    <footer class="footer"><div class="status"><span class="live" id="liveStatus">● WEBGPU LIVE</span><span id="particleStatus">12,000 shapes</span><span id="fieldStatus">0 fields</span></div><span>Seed 0284 · 60 FPS</span></footer>
+  </div>
+
+  <script type="module">
+    const canvas = document.querySelector('#gpuCanvas');
+    const wrap = document.querySelector('#canvasWrap');
+    const note = document.querySelector('#gpuNote');
+    const hint = document.querySelector('#hint');
+    const ui = {
+      count: document.querySelector('#count'), size: document.querySelector('#size'),
+      speed: document.querySelector('#speed'), noise: document.querySelector('#noise'),
+      countValue: document.querySelector('#countValue'), sizeValue: document.querySelector('#sizeValue'),
+      speedValue: document.querySelector('#speedValue'), noiseValue: document.querySelector('#noiseValue'),
+      fieldList: document.querySelector('#fieldList'), particleStatus: document.querySelector('#particleStatus'),
+      fieldStatus: document.querySelector('#fieldStatus'), freeze: document.querySelector('#freezeBtn'),
+      guides: document.querySelector('#guidesBtn'), fieldGuides: document.querySelector('#fieldGuides')
+    };
+    const MAX_PARTICLES = 30000, MAX_FIELDS = 8;
+    let particleCount = 12000, activeTool = 'vortex', frozen = false, showGuides = true, paletteIndex = 0;
+    let fields = [];
+    let dragging = -1;
+
+    window.addEventListener('unhandledrejection', event => {
+      note.classList.add('show');
+      note.innerHTML = `WebGPU 启动失败<br><small style="opacity:.65">${String(event.reason?.message || event.reason || '未知错误')}</small>`;
+      document.querySelector('#liveStatus').textContent = '● WEBGPU ERROR';
+    });
+
+    if (!navigator.gpu) {
+      note.classList.add('show');
+      document.querySelector('#liveStatus').textContent = '● WEBGPU UNAVAILABLE';
+      throw new Error('WebGPU unavailable');
+    }
+    const adapter = await navigator.gpu.requestAdapter();
+    const device = await adapter?.requestDevice();
+    if (!device) { note.classList.add('show'); throw new Error('No WebGPU device'); }
+    const context = canvas.getContext('webgpu');
+    const format = navigator.gpu.getPreferredCanvasFormat();
+    context.configure({ device, format, alphaMode: 'opaque' });
+
+    const particleData = new Float32Array(MAX_PARTICLES * 8);
+    function seedParticles(seed = Math.random() * 9999) {
+      let s = seed | 0;
+      const rand = () => ((s = Math.imul(s ^ s >>> 15, 1 | s)), ((s + Math.imul(s ^ s >>> 7, 61 | s)) ^ s) >>> 0) / 4294967296;
+      for (let i = 0; i < MAX_PARTICLES; i++) {
+        const j = i * 8;
+        particleData[j] = rand() * 2 - 1; particleData[j + 1] = rand() * 2 - 1;
+        particleData[j + 2] = (rand() - .5) * .001; particleData[j + 3] = (rand() - .5) * .001;
+        particleData[j + 4] = rand(); particleData[j + 5] = rand();
+        particleData[j + 6] = rand(); particleData[j + 7] = 0;
+      }
+      device.queue.writeBuffer(particleBuffer, 0, particleData);
+      device.queue.writeBuffer(renderParticleBuffer, 0, particleData);
+    }
+
+    const particleBuffer = device.createBuffer({ size: particleData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
+    const renderParticleBuffer = device.createBuffer({ size: particleData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+    const uniformBuffer = device.createBuffer({ size: 256, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const fieldBuffer = device.createBuffer({ size: MAX_FIELDS * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+
+    const shader = device.createShaderModule({ code: `
+      struct Particle { pos: vec2f, vel: vec2f, seed: f32, hue: f32, shape: f32, pad: f32 }
+      struct Params { dt: f32, time: f32, aspect: f32, count: f32, size: f32, speed: f32, noise: f32, fieldCount: f32, palette: f32, guides: f32, pad0: vec2f }
+      struct Field { pos: vec2f, kind: f32, strength: f32 }
+      @group(0) @binding(0) var<storage, read_write> particles: array<Particle>;
+      @group(0) @binding(1) var<uniform> params: Params;
+      @group(0) @binding(2) var<storage, read> fields: array<Field>;
+      @group(0) @binding(3) var<storage, read> renderParticles: array<Particle>;
+      fn hash(p: vec2f) -> f32 { return fract(sin(dot(p, vec2f(127.1,311.7))) * 43758.5453); }
+      @compute @workgroup_size(256)
+      fn update(@builtin(global_invocation_id) id: vec3u) {
+        let i = id.x; if (i >= u32(params.count)) { return; }
+        var p = particles[i]; var force = vec2f(0.0);
+        for (var f = 0u; f < u32(params.fieldCount); f++) {
+          let field = fields[f]; let d = field.pos - p.pos; let r2 = max(dot(d,d), .012); let n = normalize(d);
+          if (field.kind < .5) { force += vec2f(-n.y, n.x) * field.strength / (1.0 + r2 * 9.0); }
+          else if (field.kind < 1.5) { force += n * field.strength / (1.0 + r2 * 13.0); }
+          else { force -= n * field.strength / (1.0 + r2 * 13.0); }
+        }
+        let a = hash(floor(p.pos * 8.0) + floor(params.time * .16)) * 6.28318;
+        force += vec2f(cos(a), sin(a)) * params.noise * .15;
+        force += vec2f(.035, sin(p.pos.x * 4.0 + params.time * .2) * .018);
+        p.vel = p.vel * .965 + force * params.dt * params.speed;
+        p.pos += p.vel * params.dt * params.speed;
+        if (p.pos.x > 1.08) { p.pos.x = -1.08; } if (p.pos.x < -1.08) { p.pos.x = 1.08; }
+        if (p.pos.y > 1.08) { p.pos.y = -1.08; } if (p.pos.y < -1.08) { p.pos.y = 1.08; }
+        particles[i] = p;
+      }
+      struct VSOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f, @location(1) color: vec3f }
+      fn palette(t: f32, p: f32) -> vec3f {
+        if (p < .5) { if (t < .34) { return vec3f(.79,1.0,.27); } if (t < .68) { return vec3f(1.0,.38,.24); } return vec3f(.71,.60,1.0); }
+        if (p < 1.5) { if (t < .34) { return vec3f(1.0,.70,.78); } if (t < .68) { return vec3f(1.0,.91,.30); } return vec3f(.41,.84,.78); }
+        if (t < .34) { return vec3f(.95,.93,.89); } if (t < .68) { return vec3f(.54,.67,1.0); } return vec3f(.99,.45,.30);
+      }
+      @vertex fn vs(@builtin(instance_index) ii: u32, @builtin(vertex_index) vi: u32) -> VSOut {
+        let p = renderParticles[ii];
+        let corners = array<vec2f,6>(vec2f(-1.,-1.),vec2f(1.,-1.),vec2f(-1.,1.),vec2f(-1.,1.),vec2f(1.,-1.),vec2f(1.,1.));
+        let q = corners[vi]; let angle = atan2(p.vel.y, p.vel.x) + p.seed * 1.6;
+        let cs = cos(angle); let sn = sin(angle);
+        let scale = (.0045 + p.seed * .009) * params.size;
+        let local = vec2f(q.x * scale * (1.5 + p.shape), q.y * scale * .55);
+        let rot = vec2f(local.x*cs-local.y*sn, local.x*sn+local.y*cs);
+        var out: VSOut; out.pos = vec4f(p.pos + vec2f(rot.x / params.aspect, rot.y), 0., 1.); out.uv = q; out.color = palette(p.hue, params.palette); return out;
+      }
+      @fragment fn fs(in: VSOut) -> @location(0) vec4f {
+        let d = length(vec2f(in.uv.x, in.uv.y * 1.45));
+        let alpha = 1.0 - smoothstep(.68, 1.0, d);
+        if (alpha < .03) { discard; }
+        return vec4f(in.color * (1.05 - d * .18), 1.0);
+      }
+    `});
+    const bindLayout = device.createBindGroupLayout({ entries: [
+      { binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'storage' } },
+      { binding: 1, visibility: GPUShaderStage.COMPUTE | GPUShaderStage.VERTEX, buffer: { type: 'uniform' } },
+      { binding: 2, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'read-only-storage' } },
+      { binding: 3, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } }
+    ]});
+    const layout = device.createPipelineLayout({ bindGroupLayouts: [bindLayout] });
+    const computePipeline = device.createComputePipeline({ layout, compute: { module: shader, entryPoint: 'update' } });
+    const renderPipeline = device.createRenderPipeline({ layout, vertex: { module: shader, entryPoint: 'vs' }, fragment: { module: shader, entryPoint: 'fs', targets: [{ format }] }, primitive: { topology: 'triangle-list' } });
+    const bindGroup = device.createBindGroup({ layout: bindLayout, entries: [
+      { binding: 0, resource: { buffer: particleBuffer } }, { binding: 1, resource: { buffer: uniformBuffer } }, { binding: 2, resource: { buffer: fieldBuffer } }, { binding: 3, resource: { buffer: renderParticleBuffer } }
+    ]});
+    seedParticles(284);
+
+    function resize() {
+      const dpr = Math.min(devicePixelRatio, 2), rect = canvas.getBoundingClientRect();
+      canvas.width = Math.max(1, rect.width * dpr); canvas.height = Math.max(1, rect.height * dpr);
+    }
+    new ResizeObserver(resize).observe(canvas); resize();
+    const kindMap = { vortex: 0, attract: 1, repel: 2 };
+    const labelMap = { vortex: 'Vortex', attract: 'Attractor', repel: 'Repulsor' };
+    function uploadFields() {
+      const data = new Float32Array(MAX_FIELDS * 4);
+      fields.forEach((f,i) => data.set([f.x, f.y, kindMap[f.kind], f.strength], i*4));
+      device.queue.writeBuffer(fieldBuffer, 0, data); renderFields();
+    }
+    function renderFields() {
+      ui.fieldList.innerHTML = fields.length ? fields.map((f,i) => `<div class="field-item"><i class="field-dot" style="background:${f.kind==='vortex'?'#b699ff':f.kind==='attract'?'#c9ff45':'#ff623e'}"></i><span>${labelMap[f.kind]} ${String(i+1).padStart(2,'0')}</span><button data-remove="${i}" aria-label="删除">×</button></div>`).join('') : '<div class="empty">画布上还没有力场。<br>选择工具后点击画布添加。</div>';
+      ui.fieldGuides.innerHTML = showGuides ? fields.map(f => `<i class="field-guide ${f.kind}" style="left:${(f.x+1)*50}%;top:${(1-f.y)*50}%"></i>`).join('') : '';
+      ui.fieldStatus.textContent = `${fields.length} field${fields.length===1?'':'s'}`;
+    }
+    renderFields();
+    ui.fieldList.addEventListener('click', e => { const i = e.target.dataset.remove; if (i != null) { fields.splice(+i,1); uploadFields(); } });
+    function pointerPos(e) {
+      const r = canvas.getBoundingClientRect(); return { x: ((e.clientX-r.left)/r.width)*2-1, y: -(((e.clientY-r.top)/r.height)*2-1) };
+    }
+    wrap.addEventListener('pointerdown', e => {
+      if (frozen) return; const p = pointerPos(e);
+      dragging = fields.findIndex(f => Math.hypot(f.x-p.x, f.y-p.y) < .12);
+      if (dragging < 0 && fields.length < MAX_FIELDS) { fields.push({ ...p, kind: activeTool, strength: activeTool==='vortex'?2.2:1.35 }); dragging = fields.length-1; hint.classList.add('hidden'); uploadFields(); }
+      wrap.setPointerCapture(e.pointerId);
+    });
+    wrap.addEventListener('pointermove', e => { if (dragging >= 0) { Object.assign(fields[dragging], pointerPos(e)); uploadFields(); } });
+    wrap.addEventListener('pointerup', () => dragging = -1);
+    document.querySelectorAll('[data-tool]').forEach(btn => btn.addEventListener('click', () => { activeTool = btn.dataset.tool; document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('active',b===btn)); }));
+    document.addEventListener('keydown', e => { const key = e.key.toLowerCase(), map={v:'vortex',a:'attract',r:'repel'}; if(map[key]) document.querySelector(`[data-tool="${map[key]}"]`).click(); });
+    document.querySelectorAll('[data-recipe]').forEach(btn => btn.addEventListener('click', () => {
+      fields = btn.dataset.recipe === 'orbit' ? [{x:0,y:0,kind:'vortex',strength:2.2},{x:.4,y:.15,kind:'attract',strength:.85}] : [{x:0,y:0,kind:'repel',strength:1.8},{x:-.65,y:.15,kind:'vortex',strength:1.7},{x:.6,y:-.2,kind:'vortex',strength:-1.5}]; uploadFields();
+    }));
+    function bindRange(el, out, format, update) { el.addEventListener('input', () => { out.textContent = format(+el.value); update?.(+el.value); }); }
+    bindRange(ui.count, ui.countValue, v=>v.toLocaleString(), v=>{particleCount=v;ui.particleStatus.textContent=`${v.toLocaleString()} shapes`;});
+    bindRange(ui.size, ui.sizeValue, v=>(v/100).toFixed(2)); bindRange(ui.speed, ui.speedValue, v=>(v/100).toFixed(2)); bindRange(ui.noise, ui.noiseValue, v=>(v/100).toFixed(2));
+    document.querySelectorAll('.palette').forEach(btn=>btn.addEventListener('click',()=>{paletteIndex=+btn.dataset.palette;document.querySelectorAll('.palette').forEach(b=>b.classList.toggle('active',b===btn));}));
+    document.querySelector('#shuffleBtn').addEventListener('click',()=>seedParticles());
+    ui.freeze.addEventListener('click',()=>{frozen=!frozen;ui.freeze.textContent=frozen?'Unfreeze':'Freeze';ui.freeze.classList.toggle('active',frozen);wrap.classList.toggle('frozen',frozen);});
+    ui.guides.addEventListener('click',()=>{showGuides=!showGuides;ui.guides.classList.toggle('active',showGuides);renderFields();});
+    document.querySelector('#exportBtn').addEventListener('click',()=>{ const a=document.createElement('a');a.download='loeme-flow.png';a.href=canvas.toDataURL('image/png');a.click(); });
+
+    let previous = performance.now(), time = 0;
+    function frame(now) {
+      const dt = Math.min((now-previous)/1000,.033); previous=now; if(!frozen) time += dt;
+      const params = new Float32Array([frozen?0:dt,time,canvas.width/canvas.height,particleCount,+ui.size.value/100,+ui.speed.value/100,+ui.noise.value/100,fields.length,paletteIndex,showGuides?1:0,0,0]);
+      device.queue.writeBuffer(uniformBuffer,0,params);
+      const encoder=device.createCommandEncoder();
+      if(!frozen){const pass=encoder.beginComputePass();pass.setPipeline(computePipeline);pass.setBindGroup(0,bindGroup);pass.dispatchWorkgroups(Math.ceil(particleCount/256));pass.end();encoder.copyBufferToBuffer(particleBuffer,0,renderParticleBuffer,0,particleData.byteLength);}
+      const render=encoder.beginRenderPass({colorAttachments:[{view:context.getCurrentTexture().createView(),clearValue:{r:.065,g:.085,b:.075,a:1},loadOp:'clear',storeOp:'store'}]});
+      render.setPipeline(renderPipeline);render.setBindGroup(0,bindGroup);render.draw(6,particleCount);render.end();device.queue.submit([encoder.finish()]);requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

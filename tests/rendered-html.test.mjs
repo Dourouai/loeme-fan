@@ -52,10 +52,21 @@ test("server-renders the Loeme Motif workspace", async () => {
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
-test("root route points to the Motif app", async () => {
+test("root route renders the Loeme tools homepage", async () => {
   const response = await render("/");
-  assert.ok([301, 302, 303, 307, 308].includes(response.status));
-  assert.equal(new URL(response.headers.get("location"), "http://localhost").pathname, "/apps/motif");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Small tools/);
+  assert.match(html, /Serious play/);
+  assert.match(html, /One form, four states/);
+  assert.match(html, /Human/);
+  assert.match(html, /Tree/);
+  assert.match(html, /Earth/);
+  assert.match(html, /Stars/);
+  assert.match(html, /PARAMETRIC SVG STUDIO/);
+  assert.match(html, /Google Ads/);
+  assert.match(html, /Open tool/);
+  assert.match(html, /href="\/apps\/motif"/);
 });
 
 test("removes the disposable starter and uses product metadata", async () => {
