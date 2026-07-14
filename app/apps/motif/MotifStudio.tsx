@@ -534,9 +534,9 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
     <main className="motif-app">
       <header className="motif-topbar">
         <div className="motif-brand" aria-label="Loeme Motif">
-          <span className="motif-brand-mark">LM</span>
-          <span>Loeme</span>
+          <img className="motif-brand-wordmark" src="/brand/loeme-wordmark.svg" alt="Loeme" />
           <span className="motif-brand-divider">/</span>
+          <img className="motif-brand-app-icon" src="/brand/motif-app-icon.svg" alt="" />
           <strong>Motif</strong>
         </div>
 

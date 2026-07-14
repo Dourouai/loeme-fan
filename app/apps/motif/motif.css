@@ -62,7 +62,7 @@ input:focus-visible {
 }
 
 .motif-brand {
-  gap: 9px;
+  gap: 8px;
   font-size: 14px;
   font-weight: 620;
   letter-spacing: -0.02em;
@@ -72,18 +72,17 @@ input:focus-visible {
   font-weight: 720;
 }
 
-.motif-brand-mark {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border-radius: 9px;
-  color: #fff;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: -0.08em;
-  background: linear-gradient(135deg, #9a72f5, #644ee8 62%, #4f42c5);
-  box-shadow: 0 7px 18px rgba(113, 87, 232, 0.24);
+.motif-brand-wordmark {
+  display: block;
+  width: 76px;
+  height: auto;
+}
+
+.motif-brand-app-icon {
+  display: block;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
 }
 
 .motif-brand-divider {
