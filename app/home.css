@@ -203,7 +203,7 @@
 .home-split-links h2 { max-width: 480px; margin: 74px 0 0; font-size: 42px; line-height: 1; letter-spacing: -.045em; }
 .home-split-links b { margin-top: auto; font: 600 9px/1 var(--font-geist-mono); letter-spacing: .08em; text-transform: uppercase; }
 
-.home-ad { width: min(1100px, calc(100% - 68px)); min-height: 150px; margin: 34px auto 100px; padding: 18px; border: 1px solid #bcb6aa; }
+.home-ad { width: min(1360px, calc(100% - 68px)); min-height: 150px; margin: 34px auto 100px; padding: 18px; border: 1px solid #bcb6aa; }
 .home-ad-label { display: block; margin-bottom: 13px; color: #7c786f; font: 560 8px/1 var(--font-geist-mono); letter-spacing: .12em; }
 .home-ad .adsbygoogle { display: block; min-height: 100px; }
 .home-ad-placeholder { min-height: 100px; display: flex; align-items: center; justify-content: center; gap: 20px; color: #7d796f; background: rgba(17,19,16,.035); }

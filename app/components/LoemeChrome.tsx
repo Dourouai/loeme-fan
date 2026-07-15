@@ -12,7 +12,7 @@ export function SiteHeader({ active }: { active: "home" | "products" | "labs" | 
         <Link className={active === "products" ? "is-active" : ""} href="/products">Products</Link>
         <Link className={active === "labs" ? "is-active" : ""} href="/labs">Labs</Link>
       </nav>
-      <Link className="nav-launch" href="/apps/motif"><span>Launch Motif</span><i>↗</i></Link>
+      <a className="nav-launch" href="/apps/motif"><span>Launch Motif</span><i>↗</i></a>
     </header>
   );
 }

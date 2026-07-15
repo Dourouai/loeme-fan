@@ -55,7 +55,11 @@ export function ProductSections() {
           <Image src={product.icon} alt={`${product.name} icon`} width={64} height={64} />
           <h2>{product.name}</h2><p>{product.description}</p>
           <div className="product-tags">{product.tags.map(tag => <span key={tag}>{tag}</span>)}</div>
-          <Link className="product-cta" href={product.href}>{product.cta}<span>{product.href.startsWith("/apps") ? "↗" : "→"}</span></Link>
+          {product.href.startsWith("/apps") ? (
+            <a className="product-cta" href={product.href}>{product.cta}<span>↗</span></a>
+          ) : (
+            <Link className="product-cta" href={product.href}>{product.cta}<span>→</span></Link>
+          )}
         </div>
         <ProductVisual theme={product.theme} />
       </div>

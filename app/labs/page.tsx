@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { GoogleAdSlot } from "../components/GoogleAdSlot";
 import { SiteFooter, SiteHeader } from "../components/LoemeChrome";
 import "../home.css";
@@ -18,7 +17,7 @@ export default function LabsPage() {
       <section className="lab-projects">
         <div className="lab-projects-head"><span>PLAYABLE / 001</span><p>Small things made to be touched.</p></div>
         <article className="dustworks-card">
-          <div className="dustworks-copy"><span>MINI GAME · BROWSER</span><h2>Dustworks</h2><p>A tiny automation game. Place vacuums, fans, and cyclones, then build a system that cleans the dust by itself.</p><Link href="/apps/dustworks">Play the mini game <b>↗</b></Link></div>
+          <div className="dustworks-copy"><span>MINI GAME · BROWSER</span><h2>Dustworks</h2><p>A tiny automation game. Place vacuums, fans, and cyclones, then build a system that cleans the dust by itself.</p><a href="/apps/dustworks">Play the mini game <b>↗</b></a></div>
           <div className="dustworks-field" aria-hidden="true">{Array.from({ length: 90 }, (_, index) => <i key={index} />)}<b className="machine machine-a">⌁</b><b className="machine machine-b">✣</b><b className="machine machine-c">↻</b><span>WAVE / 01</span></div>
         </article>
       </section>
