@@ -1,11 +1,22 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "loeme",
+  "workers_dev": true,
   "compatibility_date": "2026-05-15",
   "assets": {
     "directory": "dist/client",
     "binding": "ASSETS"
   },
+  "routes": [
+    {
+      "pattern": "loeme.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.loeme.com",
+      "custom_domain": true
+    }
+  ],
   "observability": {
     "enabled": true
   }
