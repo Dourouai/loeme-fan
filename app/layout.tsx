@@ -1,7 +1,25 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
+import { Suspense } from "react";
+import { GoogleAnalytics } from "./components/GoogleAnalytics";
+import {
+  GOOGLE_ADSENSE_CLIENT_ID,
+  GOOGLE_ANALYTICS_ID,
+} from "./lib/google-config";
 import "./globals.css";
+
+const googleConsentDefaults = `window.dataLayer = window.dataLayer || [];
+window.gtag = window.gtag || function(){window.dataLayer.push(arguments);};
+window.gtag('consent', 'default', {
+  ad_storage: 'denied',
+  ad_user_data: 'denied',
+  ad_personalization: 'denied',
+  analytics_storage: 'denied',
+  functionality_storage: 'granted',
+  security_storage: 'granted',
+  wait_for_update: 500
+});`;
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -52,10 +70,21 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
+      <head>
+        {GOOGLE_ANALYTICS_ID || GOOGLE_ADSENSE_CLIENT_ID ? (
+          <script
+            id="google-consent-defaults"
+            dangerouslySetInnerHTML={{ __html: googleConsentDefaults }}
+          />
+        ) : null}
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         {children}
+        <Suspense fallback={null}>
+          <GoogleAnalytics />
+        </Suspense>
       </body>
     </html>
   );

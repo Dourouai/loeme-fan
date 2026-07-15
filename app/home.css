@@ -10,6 +10,7 @@
   overflow: hidden;
   color: var(--ink);
   background: var(--bone);
+  text-rendering: optimizeLegibility;
 }
 
 .loeme-site *, .loeme-site *::before, .loeme-site *::after { box-sizing: border-box; }
@@ -143,6 +144,13 @@
   .labs { margin-bottom: 50px; padding: 30px; grid-template-columns: 1fr; }.labs-orbit { width: 160px; }.labs-copy h2 { font-size: 54px; }.labs > a { grid-column: auto; }
   .site-footer { min-height: 180px; grid-template-columns: 1fr 1fr; }.site-footer p { display: none; }
 }
+
+.privacy-masthead { min-height: 540px; padding: 0 34px; color: var(--bone); background: var(--night); }
+.privacy-masthead > div { width: min(1360px, 100%); margin: 0 auto; padding: 90px 0; display: grid; grid-template-columns: .4fr 1.2fr .4fr; gap: 40px; align-items: end; }
+.privacy-masthead > div > span { align-self: start; font: 580 9px/1 var(--font-geist-mono); letter-spacing: .12em; }
+.privacy-masthead h1 { margin: 0; font-size: clamp(70px, 8vw, 118px); line-height: .8; font-weight: 550; letter-spacing: -.075em; }.privacy-masthead h1 em { color: var(--acid); font: italic 400 1em/1 Georgia, serif; }.privacy-masthead p { margin: 0; color: #969a90; font: 520 9px/1.5 var(--font-geist-mono); }
+.privacy-content { width: min(1040px, calc(100% - 68px)); margin: 0 auto; padding: 100px 0 140px; }.privacy-content > section { display: grid; grid-template-columns: 90px 1fr; gap: 34px; padding: 44px 0; border-top: 1px solid #bcb6a9; }.privacy-content > section > span { color: #77736a; font: 560 9px/1 var(--font-geist-mono); }.privacy-content h2 { margin: 0 0 18px; font-size: 30px; letter-spacing: -.035em; }.privacy-content p { max-width: 760px; margin: 0; color: #656158; font-size: 15px; line-height: 1.7; }.privacy-content a { border-bottom: 1px solid currentColor; }
+@media (max-width: 650px) { .privacy-masthead { padding: 0 18px; }.privacy-masthead > div { grid-template-columns: 1fr; padding: 70px 0; }.privacy-masthead h1 { font-size: 62px; }.privacy-content { width: calc(100% - 36px); padding: 70px 0 100px; }.privacy-content > section { grid-template-columns: 40px 1fr; gap: 18px; } }
 
 @media (prefers-reduced-motion: reduce) {
   .loeme-site *, .loeme-site *::before, .loeme-site *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }

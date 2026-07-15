@@ -56,16 +56,15 @@ test("root route renders the Loeme tools homepage", async () => {
   const response = await render("/");
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.match(html, /Small tools/);
-  assert.match(html, /Serious play/);
-  assert.match(html, /One form, four states/);
-  assert.match(html, /Human/);
-  assert.match(html, /Tree/);
-  assert.match(html, /Earth/);
-  assert.match(html, /Stars/);
-  assert.match(html, /PARAMETRIC SVG STUDIO/);
-  assert.match(html, /Google Ads/);
-  assert.match(html, /Open tool/);
+  assert.match(html, /Tools for/);
+  assert.match(html, /living/);
+  assert.match(html, /We design the conditions/);
+  assert.match(html, /Motif/);
+  assert.match(html, /Flow/);
+  assert.match(html, /Morph/);
+  assert.match(html, /CREATIVE SYSTEMS/);
+  assert.match(html, /ADVERTISEMENT/);
+  assert.match(html, /Explore products/);
   assert.match(html, /href="\/apps\/motif"/);
 });
 
@@ -78,7 +77,7 @@ test("removes the disposable starter and uses product metadata", async () => {
     readFile(new URL("../app/apps/motif/motif-engine.ts", import.meta.url), "utf8"),
   ]);
 
-  assert.match(layout, /Loeme Motif/);
+  assert.match(layout, /Tools for living systems/);
   assert.match(layout, /lang="zh-CN"/);
   assert.doesNotMatch(layout, /Starter Project|codex-preview/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
