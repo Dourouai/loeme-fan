@@ -69,12 +69,14 @@ test("root route renders the Loeme tools homepage", async () => {
 });
 
 test("removes the disposable starter and uses product metadata", async () => {
-  const [layout, packageJson, motifCss, studioSource, engineSource] = await Promise.all([
+  const [layout, packageJson, motifCss, studioSource, engineSource, homeCss, dustworksCss] = await Promise.all([
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../app/apps/motif/motif.css", import.meta.url), "utf8"),
     readFile(new URL("../app/apps/motif/MotifStudio.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/apps/motif/motif-engine.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/home.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/apps/dustworks/dustworks.css", import.meta.url), "utf8"),
   ]);
 
   assert.match(layout, /Tools for living systems/);
@@ -99,5 +101,8 @@ test("removes the disposable starter and uses product metadata", async () => {
   assert.match(engineSource, /capacity-limited/);
   assert.doesNotMatch(engineSource, /attempt > 36/);
   assert.doesNotMatch(engineSource, /outputMode:/);
+  assert.match(homeCss, /overflow-x:\s*clip/);
+  assert.doesNotMatch(dustworksCss, /html\s*,\s*body\s*\{[^}]*overflow:\s*hidden/);
+  assert.match(dustworksCss, /\.dustworks-shell\s*\{[^}]*overflow:\s*hidden/);
   await assert.rejects(access(new URL("../app/_sites-preview/SkeletonPreview.tsx", templateRoot)));
 });

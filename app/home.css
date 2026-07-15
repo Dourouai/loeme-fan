@@ -7,7 +7,7 @@
   --coral: #ff644f;
   --mineral: #1a725f;
   min-height: 100vh;
-  overflow: hidden;
+  overflow-x: clip;
   color: var(--ink);
   background: var(--bone);
   text-rendering: optimizeLegibility;
