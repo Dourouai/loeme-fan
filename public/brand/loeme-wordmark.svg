@@ -1,1 +1,14 @@
-<svg width="232" height="64" viewBox="0 0 232 64" fill="none" xmlns="http://www.w3.org/2000/svg"><title>Loeme</title><g fill="currentColor"><rect x="2" y="14" width="13" height="13" rx="6.5"/><path d="M18 14h13v13H18zM2 30h13v13H2z"/><path d="M18 30h13v13H18z" opacity=".28"/><circle cx="24.5" cy="36.5" r="3.25" fill="#7058E8"/><path d="M46 15h5v29h17v5H46V15Zm39 34c-10 0-17-7-17-17s7-18 17-18 17 8 17 18-7 17-17 17Zm0-5c7 0 11-5 11-12 0-8-4-13-11-13s-11 5-11 13c0 7 4 12 11 12Zm24-29h25v5h-19v9h17v5h-17v10h20v5h-26V15Zm33 0h7l11 25 11-25h7v34h-6V25l-10 24h-4l-10-24v24h-6V15Zm44 0h25v5h-19v9h17v5h-17v10h20v5h-26V15Z"/></g></svg>
+<svg width="188" height="64" viewBox="0 0 188 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>LOEME</title>
+  <g stroke="currentColor" stroke-width="6.5" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M7 13v38h23"/>
+    <path d="M60 16.5a18.5 18.5 0 1 0 3.5 6" stroke-linecap="round"/>
+    <path d="M76 13h25M76 32h20M76 51h25"/>
+    <path d="M76 13v38"/>
+    <path d="M111 51V13l14 25 14-25v38" stroke-linejoin="bevel"/>
+    <path d="M151 13h28M151 32h21M151 51h28"/>
+    <path d="M151 13v38"/>
+  </g>
+  <path d="M60.5 13.5 67 20" stroke="#7058E8" stroke-width="6.5" stroke-linecap="square"/>
+  <circle cx="96" cy="32" r="3.25" fill="#C8F45D"/>
+</svg>

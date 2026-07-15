@@ -22,24 +22,24 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: new URL(origin),
     title: {
-      default: "Loeme — Creative tools for visual systems",
+      default: "Loeme — Tools for living systems",
       template: "%s · Loeme",
     },
-    description: "Generate, arrange, and move visual systems with focused creative tools built for the browser.",
+    description: "Focused creative tools for growing, arranging, and moving visual systems in the browser.",
     icons: {
       icon: "/favicon.svg",
       shortcut: "/favicon.svg",
     },
     openGraph: {
-      title: "Loeme — Make with systems",
-      description: "Creative tools for generating, arranging, and moving visual forms.",
+      title: "Loeme — Tools for living systems",
+      description: "Grow forms. Arrange patterns. Direct movement.",
       type: "website",
-      images: [{ url: `${origin}/og.png`, width: 1740, height: 907, alt: "Loeme creative tools for visual systems" }],
+      images: [{ url: `${origin}/og.png`, width: 1740, height: 907, alt: "Loeme tools for living systems" }],
     },
     twitter: {
       card: "summary_large_image",
-      title: "Loeme — Make with systems",
-      description: "Creative tools for generating, arranging, and moving visual forms.",
+      title: "Loeme — Tools for living systems",
+      description: "Grow forms. Arrange patterns. Direct movement.",
       images: [`${origin}/og.png`],
     },
   };
