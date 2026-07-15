@@ -1,35 +1,64 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { GoogleAdSlot } from "./components/GoogleAdSlot";
 import { HomePlayground } from "./components/HomePlayground";
 import "./home.css";
 
 export const metadata: Metadata = {
-  title: "Loeme — Focused Design Tools",
-  description: "A quiet home for focused tools for visual exploration, pattern making, and everyday design work.",
+  title: "Loeme — Creative tools for visual systems",
+  description: "Generate, arrange, and move visual systems with focused creative tools built for the browser.",
 };
 
-const tools = [
+const apps = [
   {
+    index: "01",
     name: "Motif",
-    eyebrow: "PARAMETRIC SVG STUDIO",
-    description: "Compose vector motifs, shape repeat-aware layouts, and export production-ready SVG in the browser.",
+    verb: "Arrange",
+    eyebrow: "PARAMETRIC VECTOR STUDIO",
+    description: "Compose vector motifs, build repeat-aware layouts, and export clean SVG — all in the browser.",
+    tags: ["SVG", "Pattern", "Local-first"],
     href: "/apps/motif",
-    icon: "/brand/motif-app-icon.svg",
-    tags: ["Vector", "Pattern", "Browser"],
-    preview: "motif",
+    action: "Open Motif",
+    status: "BETA",
+    theme: "motif",
   },
   {
-    name: "Dustworks",
-    eyebrow: "AIRFLOW AUTOMATION GAME",
-    description: "Place vacuums, fans, and cyclones. Route thousands of dust particles and build a cleaning system that runs itself.",
-    href: "/apps/dustworks",
-    icon: null,
-    tags: ["Particles", "Automation", "Play"],
-    preview: "dustworks",
+    index: "02",
+    name: "Flow",
+    verb: "Move",
+    eyebrow: "FLOW FIELD COMPOSER",
+    description: "Direct thousands of forms with vortices, attraction, and repulsion. Freeze the moment that feels right.",
+    tags: ["WebGPU", "Fields", "Motion"],
+    href: "#flow",
+    action: "Preview Flow",
+    status: "IN DEVELOPMENT",
+    theme: "flow",
+  },
+  {
+    index: "03",
+    name: "Morph",
+    verb: "Grow",
+    eyebrow: "ORGANIC SHAPE LAB",
+    description: "Seed living textures, watch them grow, then turn organic patterns into editable vector shapes.",
+    tags: ["Growth", "Vector", "Generative"],
+    href: "#morph",
+    action: "Explore Morph",
+    status: "EXPERIMENT",
+    theme: "morph",
   },
 ];
+
+function AppVisual({ theme }: { theme: string }) {
+  return (
+    <div className={`app-visual app-visual-${theme}`} aria-hidden="true">
+      <div className="visual-toolbar"><i /><i /><i /><span>UNTITLED / {theme.toUpperCase()}</span></div>
+      {theme === "motif" && <div className="motif-grid">{Array.from({ length: 24 }, (_, i) => <i key={i} />)}</div>}
+      {theme === "flow" && <div className="flow-field"><b /><b /><b />{Array.from({ length: 54 }, (_, i) => <i key={i} />)}</div>}
+      {theme === "morph" && <div className="morph-field"><i /><i /><i /><i /></div>}
+      <div className="visual-status"><span>CANVAS 01</span><span>LIVE OUTPUT</span></div>
+    </div>
+  );
+}
 
 export default function Home() {
   return (
@@ -39,82 +68,80 @@ export default function Home() {
           <Image src="/brand/loeme-wordmark.svg" alt="Loeme" width={196} height={64} priority />
         </Link>
         <nav aria-label="Primary navigation">
-          <a href="#tools">Product</a>
-          <a href="#about">About</a>
+          <a href="#apps">Apps</a>
+          <a href="#system">System</a>
+          <a href="#labs">Labs</a>
         </nav>
+        <Link className="nav-cta" href="/apps/motif">Open Motif <span>↗</span></Link>
       </header>
 
-      <section className="home-intro" id="about">
-        <div className="home-intro-copy">
-          <span>LOEME DESIGN TOOLS</span>
-          <h1>Small tools.<br />Serious play.</h1>
-          <p>Focused creative utilities for exploring shapes, building visual systems, and making useful things in the browser.</p>
-          <div className="home-intro-actions">
-            <a href="#tools">Explore the product <span aria-hidden="true">↓</span></a>
-            <small><i /> 02 tools are live</small>
+      <section className="hero">
+        <div className="hero-kicker"><span>LOEME CREATIVE TOOLS</span><i>01—03</i></div>
+        <div className="hero-grid">
+          <div className="hero-copy">
+            <h1>Make with<br /><em>systems.</em></h1>
+            <p>Focused tools for generating, arranging, and moving visual forms — without leaving your browser.</p>
+            <div className="hero-actions">
+              <a className="button-primary" href="#apps">Explore the apps <span>↓</span></a>
+              <Link className="button-text" href="/apps/motif">Start with Motif <span>↗</span></Link>
+            </div>
+          </div>
+          <div className="hero-canvas">
+            <HomePlayground />
+            <div className="canvas-note"><span>ONE FORM</span><i /><span>ENDLESS SYSTEMS</span></div>
           </div>
         </div>
-        <HomePlayground />
+        <div className="hero-index">
+          <span>VECTOR NATIVE</span><i />
+          <span>PARAMETRIC</span><i />
+          <span>LOCAL FIRST</span><i />
+          <span>MADE FOR PLAY</span>
+        </div>
       </section>
 
-      <div className="home-signal-strip" aria-label="Loeme tool principles">
-        <span>VECTOR NATIVE</span><i />
-        <span>PARAMETRIC</span><i />
-        <span>LOCAL FIRST</span><i />
-        <span>MADE FOR PLAY</span>
-      </div>
-
-      <section className="home-tools" id="tools">
-        <div className="home-section-heading">
-          <div><span>PRODUCT</span><i>{String(tools.length).padStart(2, "0")}</i></div>
-          <p>Available now</p>
+      <section className="apps-section" id="apps">
+        <div className="section-head">
+          <div><span>THE TOOLBOX</span><b>Three focused apps.<br />One creative system.</b></div>
+          <p>Start anywhere. Each tool is designed around one clear creative action, with a shared language that stays out of your way.</p>
         </div>
-
-        <div className="home-tool-grid">
-          {tools.map((tool) => (
-            <Link className="home-tool-card" href={tool.href} key={tool.name}>
-              <div className="home-tool-copy">
-                {tool.icon ? (
-                  <Image className="home-tool-icon" src={tool.icon} alt="" width={64} height={64} />
-                ) : (
-                  <div className="home-tool-icon home-tool-icon-dust" aria-hidden="true">↻</div>
-                )}
-                <span>{tool.eyebrow}</span>
-                <h2>{tool.name}</h2>
-                <p>{tool.description}</p>
-                <div className="home-tool-tags">
-                  {tool.tags.map((tag) => <i key={tag}>{tag}</i>)}
-                </div>
+        <div className="app-list">
+          {apps.map((app) => (
+            <article className={`app-row app-row-${app.theme}`} id={app.theme} key={app.name}>
+              <div className="app-number">{app.index}</div>
+              <div className="app-copy">
+                <div className="app-meta"><span>{app.eyebrow}</span><i>{app.status}</i></div>
+                <h2>{app.name}<sup>{app.verb}</sup></h2>
+                <p>{app.description}</p>
+                <div className="app-tags">{app.tags.map(tag => <span key={tag}>{tag}</span>)}</div>
+                {app.href.startsWith("/") ? <Link className="app-link" href={app.href}>{app.action} <span>↗</span></Link> : <a className="app-link" href={app.href}>{app.action} <span>→</span></a>}
               </div>
-
-              <div className={`home-tool-preview ${tool.preview === "dustworks" ? "home-preview-dustworks" : ""}`} aria-hidden="true">
-                <div className="home-preview-bar"><span>{tool.preview === "dustworks" ? "Workshop · Wave 01" : "Coastal Bloom"}</span><b><i /> LIVE</b></div>
-                {tool.preview === "dustworks" ? (
-                  <div className="home-preview-dust-field">
-                    {Array.from({ length: 72 }, (_, index) => <i key={index} />)}
-                    <b className="home-dust-device home-dust-vacuum">⌁</b>
-                    <b className="home-dust-device home-dust-fan">✣</b>
-                    <b className="home-dust-device home-dust-cyclone">↻</b>
-                  </div>
-                ) : (
-                  <div className="home-preview-pattern">
-                    {Array.from({ length: 30 }, (_, index) => <i key={index} />)}
-                  </div>
-                )}
-              </div>
-
-              <div className="home-tool-open">Open tool <span aria-hidden="true">↗</span></div>
-            </Link>
+              <AppVisual theme={app.theme} />
+            </article>
           ))}
         </div>
       </section>
 
-      <GoogleAdSlot />
+      <section className="system-section" id="system">
+        <div className="system-title"><span>ONE SYSTEM</span><h2>Grow it. Arrange it.<br />Set it in motion.</h2></div>
+        <div className="system-flow">
+          <div><i>01</i><b>Morph</b><span>Generate organic forms</span></div>
+          <strong>→</strong>
+          <div><i>02</i><b>Motif</b><span>Compose visual systems</span></div>
+          <strong>→</strong>
+          <div><i>03</i><b>Flow</b><span>Direct movement & energy</span></div>
+        </div>
+        <p className="system-note">Each app works alone. Together, they turn a single form into an entire visual language.</p>
+      </section>
+
+      <section className="labs-section" id="labs">
+        <div><span>LOEME LABS / 001</span><h2>Dustworks</h2><p>A playful particle automation experiment. Place machines, route dust, and watch a tiny system learn to clean itself.</p></div>
+        <Link href="/apps/dustworks">Enter the experiment <span>↗</span></Link>
+      </section>
 
       <footer className="home-footer">
-        <Image src="/brand/loeme-wordmark.svg" alt="Loeme" width={196} height={64} />
-        <p>Tools for making with systems.</p>
-        <span>© {new Date().getFullYear()} Loeme</span>
+        <div><Image src="/brand/loeme-wordmark.svg" alt="Loeme" width={196} height={64} /><p>Tools for making with systems.</p></div>
+        <div><a href="#apps">Apps</a><a href="#system">System</a><a href="#labs">Labs</a></div>
+        <span>© {new Date().getFullYear()} LOEME</span>
       </footer>
     </main>
   );
