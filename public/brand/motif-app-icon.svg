@@ -1,11 +1,1 @@
-<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="64" height="64" rx="16" fill="#201D2A"/>
-  <clipPath id="tile"><rect width="64" height="64" rx="16"/></clipPath>
-  <g clip-path="url(#tile)">
-    <path d="M16 0V64M32 0V64M48 0V64M0 16H64M0 32H64M0 48H64" stroke="#393443" stroke-width="1"/>
-    <path d="M-4 40C4 40 8 21 16 21C24 21 24 43 32 43C40 43 40 21 48 21C56 21 60 40 68 40" stroke="#9B83FF" stroke-width="5" stroke-linecap="round"/>
-    <circle cx="16" cy="21" r="3.5" fill="#6FE0B6"/>
-    <circle cx="32" cy="43" r="3.5" fill="#6FE0B6"/>
-    <circle cx="48" cy="21" r="3.5" fill="#6FE0B6"/>
-  </g>
-</svg>
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><title>Loeme Motif</title><rect width="64" height="64" rx="15" fill="#17171B"/><path d="M13 13h16v16H13zM35 13h16v16H35zM13 35h16v16H13zM35 35h16v16H35z" stroke="#F2F0EA" stroke-width="2"/><circle cx="21" cy="21" r="5" fill="#7058E8"/><circle cx="43" cy="43" r="5" fill="#C8F45D"/><path d="M29 21h6M43 29v6M35 43h-6M21 35v-6" stroke="#F2F0EA" stroke-width="2" stroke-linecap="round"/></svg>

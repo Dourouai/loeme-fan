@@ -21,6 +21,7 @@ const apps = [
     action: "Open Motif",
     status: "BETA",
     theme: "motif",
+    icon: "/brand/motif-app-icon.svg",
   },
   {
     index: "02",
@@ -33,6 +34,7 @@ const apps = [
     action: "Preview Flow",
     status: "IN DEVELOPMENT",
     theme: "flow",
+    icon: "/brand/flow-app-icon.svg",
   },
   {
     index: "03",
@@ -45,6 +47,7 @@ const apps = [
     action: "Explore Morph",
     status: "EXPERIMENT",
     theme: "morph",
+    icon: "/brand/morph-app-icon.svg",
   },
 ];
 
@@ -110,6 +113,7 @@ export default function Home() {
               <div className="app-number">{app.index}</div>
               <div className="app-copy">
                 <div className="app-meta"><span>{app.eyebrow}</span><i>{app.status}</i></div>
+                <Image className="app-icon" src={app.icon} alt={`${app.name} app icon`} width={64} height={64} />
                 <h2>{app.name}<sup>{app.verb}</sup></h2>
                 <p>{app.description}</p>
                 <div className="app-tags">{app.tags.map(tag => <span key={tag}>{tag}</span>)}</div>
