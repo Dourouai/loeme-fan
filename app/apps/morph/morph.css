@@ -1,0 +1,504 @@
+:root {
+  --morph-workspace: #f2efe7;
+  --morph-panel: rgba(251, 250, 246, 0.96);
+  --morph-canvas: #12211b;
+  --morph-text: #17201c;
+  --morph-muted: #747b75;
+  --morph-line: #e1ded4;
+  --morph-moss: #3d7a5f;
+  --morph-moss-soft: #e3eee7;
+  --morph-lime: #c8f45d;
+  --morph-coral: #ff715b;
+  --morph-water: #74b7c9;
+  --morph-shadow: 0 18px 50px rgba(42, 55, 47, 0.08), 0 2px 8px rgba(32, 43, 36, 0.04);
+}
+
+* { box-sizing: border-box; }
+
+.morph-app button,
+.morph-app input { font: inherit; }
+
+.morph-app button { color: inherit; }
+
+.morph-app button:focus-visible,
+.morph-app input:focus-visible {
+  outline: 2px solid var(--morph-coral);
+  outline-offset: 2px;
+}
+
+.morph-app {
+  min-height: 100vh;
+  color: var(--morph-text);
+  background:
+    radial-gradient(circle at 52% -12%, rgba(200, 244, 93, 0.11), transparent 30rem),
+    linear-gradient(180deg, #f7f4ec 0, var(--morph-workspace) 100%);
+  font-family: var(--font-geist-sans), Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.morph-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: 64px;
+  display: grid;
+  grid-template-columns: minmax(300px, 1fr) auto minmax(300px, 1fr);
+  align-items: center;
+  gap: 18px;
+  padding: 0 20px;
+  border-bottom: 1px solid rgba(215, 211, 200, 0.92);
+  background: rgba(248, 246, 239, 0.88);
+  backdrop-filter: blur(22px);
+}
+
+.morph-brand-row,
+.morph-brand,
+.morph-project,
+.morph-top-actions,
+.morph-mode-tabs,
+.morph-status,
+.morph-canvas-meta,
+.morph-canvas-tools {
+  display: flex;
+  align-items: center;
+}
+
+.morph-brand-row { min-width: 0; gap: 18px; }
+
+.morph-brand { gap: 8px; font-size: 14px; letter-spacing: -0.02em; }
+.morph-brand img { width: 22px; height: 22px; border-radius: 7px; }
+.morph-brand strong { font-weight: 740; }
+
+.morph-project {
+  min-width: 0;
+  gap: 7px;
+  padding-left: 16px;
+  border-left: 1px solid var(--morph-line);
+}
+
+.morph-back {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--morph-muted);
+  text-decoration: none;
+}
+
+.morph-back:hover { color: var(--morph-text); background: #ebe8de; }
+
+.morph-project input {
+  width: 148px;
+  height: 32px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--morph-text);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 620;
+}
+
+.morph-project input:focus { background: #fff; }
+
+.morph-mode-tabs {
+  justify-self: center;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid var(--morph-line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: 0 5px 15px rgba(39, 51, 43, 0.04);
+}
+
+.morph-mode-tabs button {
+  min-width: 82px;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  color: #757d77;
+  background: transparent;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.morph-mode-tabs button.is-active {
+  color: var(--morph-text);
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(43, 58, 48, 0.08);
+}
+
+.morph-mode-tabs button:disabled { opacity: 0.38; cursor: not-allowed; }
+
+.morph-top-actions { justify-self: end; gap: 7px; }
+
+.morph-status {
+  gap: 7px;
+  margin-right: 4px;
+  color: var(--morph-muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.morph-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--morph-lime);
+  box-shadow: 0 0 0 4px rgba(200, 244, 93, 0.13);
+}
+
+.morph-status.is-frozen i { background: var(--morph-water); box-shadow: 0 0 0 4px rgba(116,183,201,.12); }
+.morph-status.is-error i { background: var(--morph-coral); box-shadow: 0 0 0 4px rgba(255,113,91,.12); }
+
+.morph-icon-button,
+.morph-secondary-button,
+.morph-primary-button {
+  height: 34px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.morph-icon-button {
+  width: 34px;
+  padding: 0;
+  border: 1px solid var(--morph-line);
+  background: rgba(255,255,255,.74);
+}
+
+.morph-secondary-button {
+  padding: 0 13px;
+  border: 1px solid #cdd9d1;
+  color: #315f4a;
+  background: var(--morph-moss-soft);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.morph-primary-button {
+  padding: 0 16px;
+  border: 0;
+  color: white;
+  background: var(--morph-moss);
+  font-size: 10px;
+  font-weight: 680;
+  box-shadow: 0 9px 20px rgba(61, 122, 95, 0.2);
+}
+
+.morph-primary-button span { margin-left: 7px; }
+.morph-icon-button:hover:not(:disabled),
+.morph-secondary-button:hover:not(:disabled),
+.morph-primary-button:hover:not(:disabled) { transform: translateY(-1px); }
+.morph-icon-button:disabled,
+.morph-secondary-button:disabled,
+.morph-primary-button:disabled { opacity: .38; cursor: not-allowed; box-shadow: none; }
+
+.morph-workspace {
+  min-width: 960px;
+  height: calc(100vh - 64px);
+  min-height: 650px;
+  display: grid;
+  grid-template-columns: 240px minmax(520px, 1fr) 320px;
+  gap: 14px;
+  padding: 14px;
+}
+
+.morph-panel {
+  border: 1px solid rgba(225, 222, 212, .96);
+  border-radius: 16px;
+  background: var(--morph-panel);
+  box-shadow: var(--morph-shadow);
+}
+
+.morph-left,
+.morph-inspector {
+  height: calc(100vh - 92px);
+  min-height: 622px;
+  position: sticky;
+  top: 78px;
+  overflow: hidden;
+}
+
+.morph-left { display: flex; flex-direction: column; }
+
+.morph-panel-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--morph-line);
+}
+
+.morph-panel-section:last-child { border-bottom: 0; }
+
+.morph-eyebrow {
+  display: block;
+  color: #8d948e;
+  font-size: 8px;
+  line-height: 1;
+  font-weight: 760;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.morph-panel-heading,
+.morph-canvas-header,
+.morph-inspector-heading,
+.morph-field-head,
+.morph-section-head,
+.morph-version-meta,
+.morph-export-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.morph-panel-heading h2,
+.morph-canvas-header h1,
+.morph-inspector-heading h2 {
+  margin: 4px 0 0;
+  font-size: 15px;
+  line-height: 1.2;
+  letter-spacing: -.025em;
+}
+
+.morph-presets {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.morph-preset {
+  position: relative;
+  min-height: 98px;
+  padding: 7px;
+  border: 1px solid var(--morph-line);
+  border-radius: 11px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.morph-preset:hover { border-color: #a8bbae; transform: translateY(-1px); }
+.morph-preset.is-active { border-color: var(--morph-moss); box-shadow: inset 0 0 0 1px rgba(61,122,95,.12); }
+
+.morph-preset-preview {
+  height: 64px;
+  display: block;
+  overflow: hidden;
+  border-radius: 8px;
+  background-color: var(--morph-canvas);
+}
+
+.morph-preset-preview.is-cells {
+  background-image: radial-gradient(circle, var(--morph-lime) 0 12%, transparent 13%), radial-gradient(circle, var(--morph-lime) 0 8%, transparent 9%);
+  background-position: 4px 5px, 26px 25px;
+  background-size: 34px 34px, 31px 31px;
+}
+
+.morph-preset-preview.is-coral {
+  background-image: radial-gradient(ellipse at 20% 20%, transparent 0 13%, var(--morph-coral) 14% 23%, transparent 24%), radial-gradient(ellipse at 70% 65%, transparent 0 14%, var(--morph-coral) 15% 23%, transparent 24%);
+  background-size: 50px 40px, 52px 44px;
+}
+
+.morph-preset-preview.is-maze {
+  background-image: repeating-radial-gradient(ellipse at 20% 50%, transparent 0 5px, var(--morph-water) 6px 9px, transparent 10px 14px);
+}
+
+.morph-preset-preview.is-worms {
+  background-image: repeating-linear-gradient(25deg, transparent 0 7px, #f5cf67 8px 12px, transparent 13px 21px);
+}
+
+.morph-preset strong { display: block; margin: 6px 2px 0; font-size: 9px; }
+.morph-preset i { position: absolute; top: 8px; right: 8px; width: 16px; height: 16px; display: grid; place-items: center; border-radius: 999px; color: white; background: var(--morph-moss); font-size: 8px; font-style: normal; opacity: 0; }
+.morph-preset.is-active i { opacity: 1; }
+
+.morph-tool-row { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 12px; }
+.morph-tool-row button,
+.morph-action-list button,
+.morph-output-types button {
+  border: 1px solid var(--morph-line);
+  border-radius: 9px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.morph-tool-row button { min-height: 62px; display: grid; place-items: center; gap: 3px; padding: 8px; color: var(--morph-muted); font-size: 9px; }
+.morph-tool-row button b { font-size: 17px; font-weight: 500; }
+.morph-tool-row button.is-active { color: #2f634a; border-color: var(--morph-moss); background: var(--morph-moss-soft); }
+
+.morph-action-list { display: grid; gap: 6px; margin-top: 12px; }
+.morph-action-list button { height: 34px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between; color: #59625c; font-size: 9px; }
+.morph-action-list button:hover { border-color: #b3c0b7; }
+
+.morph-versions { min-height: 0; flex: 1; display: flex; flex-direction: column; }
+.morph-version-list { min-height: 0; display: grid; gap: 7px; margin-top: 12px; overflow-y: auto; }
+
+.morph-version {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 9px;
+  align-items: center;
+  padding: 7px;
+  border: 1px solid var(--morph-line);
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.morph-version.is-active { border-color: var(--morph-moss); background: #f7faf8; }
+.morph-version img { width: 48px; height: 48px; object-fit: cover; border-radius: 7px; background: var(--morph-canvas); }
+.morph-version strong { display: block; font-size: 9px; }
+.morph-version span { display: block; margin-top: 4px; color: var(--morph-muted); font-size: 8px; }
+.morph-empty { margin: 12px 0 0; color: #969c97; font-size: 9px; line-height: 1.55; }
+
+.morph-center { min-width: 0; min-height: 0; }
+.morph-canvas-panel { height: 100%; min-height: 0; display: flex; flex-direction: column; padding: 16px; }
+.morph-canvas-header h1 { font-size: 16px; }
+
+.morph-canvas-meta { gap: 8px; color: var(--morph-muted); font-size: 9px; }
+.morph-canvas-meta i { width: 7px; height: 7px; border-radius: 50%; background: var(--morph-lime); }
+
+.morph-stage {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  margin-top: 13px;
+  border: 1px solid #d9d8ce;
+  border-radius: 12px;
+  background:
+    linear-gradient(rgba(18,33,27,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(18,33,27,.035) 1px, transparent 1px),
+    #e9e5dc;
+  background-size: 18px 18px;
+}
+
+.morph-artboard {
+  position: relative;
+  width: min(calc(100% - 72px), calc(100vh - 180px));
+  max-width: 760px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--morph-canvas);
+  box-shadow: 0 20px 55px rgba(26, 38, 31, .2);
+  touch-action: none;
+}
+
+.morph-artboard canvas,
+.morph-vector-preview {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.morph-vector-preview { transition: opacity 120ms ease; }
+.morph-vector-preview.is-updating { opacity: .6; }
+.morph-artboard.is-grow { cursor: crosshair; }
+.morph-brush-cursor { position: absolute; z-index: 5; border: 1px solid rgba(255,255,255,.9); border-radius: 999px; box-shadow: 0 0 0 1px rgba(18,33,27,.35); pointer-events: none; transform: translate(-50%, -50%); }
+
+.morph-canvas-message {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  padding: 36px;
+  color: #f8fbf9;
+  background: var(--morph-canvas);
+  text-align: center;
+}
+
+.morph-canvas-message > div { max-width: 320px; }
+.morph-canvas-message span { display: inline-grid; width: 38px; height: 38px; place-items: center; margin-bottom: 14px; border: 1px solid rgba(255,255,255,.18); border-radius: 50%; color: var(--morph-lime); }
+.morph-canvas-message strong { display: block; font-size: 16px; }
+.morph-canvas-message p { margin: 9px 0 0; color: #aebbb4; font-size: 10px; line-height: 1.6; }
+.morph-canvas-message button { height: 34px; margin-top: 15px; padding: 0 13px; border: 1px solid rgba(255,255,255,.25); border-radius: 9px; color: white; background: rgba(255,255,255,.08); cursor: pointer; }
+
+.morph-hint { position: absolute; z-index: 6; left: 50%; bottom: 18px; translate: -50% 0; padding: 7px 10px; border: 1px solid rgba(255,255,255,.14); border-radius: 999px; color: #e9f1ec; background: rgba(11, 24, 18, .7); backdrop-filter: blur(10px); font-size: 8px; pointer-events: none; white-space: nowrap; }
+
+.morph-canvas-tools { position: absolute; left: 12px; bottom: 12px; gap: 3px; padding: 5px; border: 1px solid rgba(216,213,202,.92); border-radius: 9px; background: rgba(255,255,255,.9); box-shadow: 0 7px 20px rgba(45,55,48,.1); backdrop-filter: blur(12px); }
+.morph-canvas-tools span { padding: 4px 7px; border-right: 1px solid #e8e5dc; color: #707871; font-size: 8px; }
+.morph-canvas-tools span:last-child { border-right: 0; }
+
+.morph-inspector { display: flex; flex-direction: column; }
+.morph-inspector-heading { padding: 16px; border-bottom: 1px solid var(--morph-line); }
+.morph-inspector-heading > div { display: flex; align-items: center; gap: 9px; }
+.morph-inspector-heading i { width: 8px; height: 8px; border-radius: 50%; background: var(--morph-lime); }
+.morph-inspector-heading h2 { margin: 0; }
+.morph-inspector-body { min-height: 0; flex: 1; overflow-y: auto; }
+.morph-inspector-section { padding: 16px; border-bottom: 1px solid var(--morph-line); }
+.morph-inspector-section:last-child { border-bottom: 0; }
+.morph-section-head strong { font-size: 10px; }
+.morph-section-head span { color: var(--morph-muted); font-size: 8px; }
+.morph-section-copy { margin: 8px 0 0; color: var(--morph-muted); font-size: 9px; line-height: 1.55; }
+
+.morph-field { display: block; margin-top: 16px; }
+.morph-field-head { margin-bottom: 9px; color: #505a53; font-size: 9px; }
+.morph-field-head output { color: var(--morph-muted); font-family: var(--font-geist-mono), monospace; font-size: 8px; }
+.morph-field input[type="range"] { width: 100%; height: 3px; appearance: none; border-radius: 999px; background: #d8ddd8; }
+.morph-field input[type="range"]::-webkit-slider-thumb { width: 14px; height: 14px; appearance: none; border: 3px solid #fff; border-radius: 50%; background: var(--morph-moss); box-shadow: 0 0 0 1px var(--morph-moss); cursor: pointer; }
+.morph-range-ends { display: flex; justify-content: space-between; margin-top: 6px; color: #9a9f9b; font-size: 7px; }
+
+.morph-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.morph-switch-row strong { display: block; font-size: 9px; }
+.morph-switch-row small { display: block; margin-top: 3px; color: var(--morph-muted); font-size: 8px; }
+.morph-switch { width: 38px; height: 22px; position: relative; flex: 0 0 auto; padding: 0; border: 0; border-radius: 999px; background: #c9cec9; cursor: pointer; }
+.morph-switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 160ms ease; }
+.morph-switch.is-active { background: var(--morph-moss); }
+.morph-switch.is-active::after { transform: translateX(16px); }
+
+.morph-colorways { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.morph-colorway { padding: 6px; border: 1px solid var(--morph-line); border-radius: 10px; background: #fff; cursor: pointer; text-align: left; }
+.morph-colorway.is-active { border-color: var(--morph-moss); box-shadow: inset 0 0 0 1px rgba(61,122,95,.12); }
+.morph-colorway-preview { height: 34px; display: grid; grid-template-columns: 2fr 1fr; overflow: hidden; border-radius: 7px; }
+.morph-colorway-preview i { display: block; }
+.morph-colorway strong { display: block; margin: 6px 2px 1px; font-size: 8px; }
+
+.morph-output-types { display: grid; grid-template-columns: 1fr; gap: 7px; margin-top: 12px; }
+.morph-output-types button { min-height: 56px; padding: 10px; text-align: left; }
+.morph-output-types button strong { display: block; font-size: 9px; }
+.morph-output-types button small { display: block; margin-top: 4px; color: var(--morph-muted); font-size: 8px; }
+.morph-output-types button.is-active { border-color: var(--morph-moss); background: var(--morph-moss-soft); }
+
+.morph-export-summary { display: grid; gap: 0; margin-top: 10px; border: 1px solid var(--morph-line); border-radius: 11px; background: #fff; overflow: hidden; }
+.morph-export-row { min-height: 38px; padding: 0 11px; border-bottom: 1px solid #ece9e1; }
+.morph-export-row:last-child { border-bottom: 0; }
+.morph-export-row span { color: var(--morph-muted); font-size: 8px; }
+.morph-export-row strong { font-family: var(--font-geist-mono), monospace; font-size: 8px; }
+.morph-download { width: 100%; height: 40px; margin-top: 12px; border: 0; border-radius: 10px; color: #fff; background: var(--morph-moss); font-size: 10px; font-weight: 680; cursor: pointer; }
+.morph-download:disabled { opacity: .4; cursor: not-allowed; }
+
+.morph-notice { position: fixed; z-index: 50; left: 50%; bottom: 20px; translate: -50% 0; padding: 9px 13px; border: 1px solid rgba(255,255,255,.18); border-radius: 999px; color: white; background: rgba(18,33,27,.92); box-shadow: 0 12px 30px rgba(20,30,24,.2); font-size: 9px; }
+
+.morph-compact-warning { display: none; }
+
+@media (max-width: 1179px) {
+  .morph-workspace { grid-template-columns: 210px minmax(480px, 1fr) 280px; gap: 10px; padding: 10px; }
+  .morph-left, .morph-inspector { height: calc(100vh - 84px); top: 74px; }
+  .morph-topbar { padding: 0 12px; gap: 10px; }
+  .morph-project input { width: 112px; }
+  .morph-mode-tabs button { min-width: 70px; padding: 0 9px; }
+}
+
+@media (max-width: 959px) {
+  .morph-compact-warning { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(242,239,231,.96); }
+  .morph-compact-warning > div { max-width: 360px; padding: 26px; border: 1px solid var(--morph-line); border-radius: 16px; background: #fff; box-shadow: var(--morph-shadow); text-align: center; }
+  .morph-compact-warning strong { display: block; font-size: 18px; }
+  .morph-compact-warning p { color: var(--morph-muted); font-size: 11px; line-height: 1.6; }
+  .morph-compact-warning button { height: 36px; padding: 0 14px; border: 0; border-radius: 9px; color: #fff; background: var(--morph-moss); cursor: pointer; }
+}
+
+@media (max-height: 680px) {
+  .morph-topbar { height: 56px; }
+  .morph-workspace { height: calc(100vh - 56px); min-height: 590px; }
+  .morph-left, .morph-inspector { height: calc(100vh - 76px); min-height: 570px; top: 66px; }
+  .morph-artboard { width: min(calc(100% - 92px), calc(100vh - 145px)); }
+}
