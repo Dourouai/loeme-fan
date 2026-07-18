@@ -61,12 +61,13 @@ test("root route renders the Loeme tools homepage", async () => {
   assert.match(html, /living/);
   assert.match(html, /We design the conditions/);
   assert.match(html, /Motif/);
-  assert.match(html, /Flow/);
   assert.match(html, /Morph/);
+  assert.doesNotMatch(html, />Flow</);
   assert.match(html, /CREATIVE SYSTEMS/);
   assert.match(html, /ADVERTISEMENT/);
   assert.match(html, /Explore products/);
   assert.match(html, /href="\/apps\/motif"/);
+  assert.match(html, /href="\/apps\/morph"/);
 });
 
 test("removes the disposable starter and uses product metadata", async () => {

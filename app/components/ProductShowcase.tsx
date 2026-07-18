@@ -1,4 +1,3 @@
-import type { CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -9,12 +8,7 @@ export const products = [
     tags: ["VECTOR NATIVE", "PARAMETRIC", "SVG OUTPUT"], href: "/apps/motif", cta: "Open Motif", theme: "motif", icon: "/brand/motif-app-icon.svg",
   },
   {
-    number: "02", name: "Flow", action: "Move", status: "In development",
-    description: "Shape the direction, density, and rhythm of thousands of forms with fields you can touch.",
-    tags: ["WEBGPU", "DIRECT MANIPULATION", "PNG OUTPUT"], href: "/products#flow", cta: "Meet Flow", theme: "flow", icon: "/brand/flow-app-icon.svg",
-  },
-  {
-    number: "03", name: "Morph", action: "Grow", status: "Experiment",
+    number: "02", name: "Morph", action: "Grow", status: "Experiment",
     description: "Seed organic behavior, let it evolve, then freeze the right moment as an editable vector form.",
     tags: ["REACTION DIFFUSION", "ORGANIC", "VECTOR OUTPUT"], href: "/apps/morph", cta: "Open Morph", theme: "morph", icon: "/brand/morph-app-icon.svg",
   },
@@ -26,14 +20,6 @@ function ProductVisual({ theme }: { theme: string }) {
       <div className="visual-chrome"><span>COMPOSITION / 01</span><i>SEED 042</i></div>
       <div className="motif-art">{Array.from({ length: 30 }, (_, index) => <i key={index} />)}</div>
       <div className="visual-readout"><span>24 FORMS</span><span>REPEAT / ON</span><span>SVG</span></div>
-    </div>
-  );
-
-  if (theme === "flow") return (
-    <div className="product-visual flow-visual" aria-hidden="true">
-      <div className="visual-chrome"><span>FIELD / VORTEX</span><i>LIVE</i></div>
-      <div className="flow-art"><b className="flow-handle flow-handle-a" /><b className="flow-handle flow-handle-b" />{Array.from({ length: 72 }, (_, index) => <i key={index} style={{ "--delay": `${-index * .11}s` } as CSSProperties} />)}</div>
-      <div className="visual-readout"><span>12K FORMS</span><span>60 FPS</span><span>WEBGPU</span></div>
     </div>
   );
 

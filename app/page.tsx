@@ -9,7 +9,7 @@ import "./home.css";
 
 export const metadata = {
   title: "Loeme — Tools for living systems",
-  description: "Focused creative tools for growing, arranging, and moving visual systems in the browser.",
+  description: "Focused creative tools for growing and arranging visual systems in the browser.",
 } satisfies Metadata;
 
 function LivingField() {
@@ -32,22 +32,22 @@ export default function Home() {
           <div className="hero-statement">
             <div className="micro-label"><i /> CREATIVE SYSTEMS / BROWSER NATIVE</div>
             <h1>Tools for<br /><span>living</span> systems.</h1>
-            <p>Loeme makes focused creative tools for growing forms, arranging patterns, and directing movement.</p>
+            <p>Loeme makes focused creative tools for growing forms and arranging them into useful visual systems.</p>
             <div className="hero-links"><Link href="/products">Explore products <span>→</span></Link><Link href="/labs">Visit the lab <span>↗</span></Link></div>
           </div>
           <LivingField />
         </div>
-        <div className="signal-strip"><div><span>01</span> GROW</div><i /><div><span>02</span> ARRANGE</div><i /><div><span>03</span> MOVE</div><i /><div><span>∞</span> EXPORT</div></div>
+        <div className="signal-strip"><div><span>01</span> GROW</div><i /><div><span>02</span> ARRANGE</div><i /><div><span>∞</span> EXPORT</div></div>
       </section>
 
       <section className="home-intro">
         <span>LOEME / ABOUT</span>
         <h2>We design the conditions.<br /><em>You discover the form.</em></h2>
-        <p>Three independent products share one idea: creative software should make complex systems direct, playful, and useful.</p>
+        <p>Two focused products share one idea: creative software should make complex systems direct, playful, and useful.</p>
       </section>
 
       <section className="home-products">
-        <div className="home-products-head"><span>THE PRODUCTS / 01—03</span><Link href="/products">View all products <b>→</b></Link></div>
+        <div className="home-products-head"><span>THE PRODUCTS / 01—02</span><Link href="/products">View all products <b>→</b></Link></div>
         <div className="home-product-grid">
           {products.map(product => (
             <Link className={`home-product-card home-product-${product.theme}`} href={product.href} key={product.name}>
