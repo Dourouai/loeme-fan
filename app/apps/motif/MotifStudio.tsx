@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import Image from "next/image";
 import {
   ChangeEvent,
   useEffect,
@@ -41,16 +43,28 @@ type HistoryState = {
   past: ProjectState[];
   present: ProjectState;
   future: ProjectState[];
+  activeGroup: { id: string; hasCommitted: boolean } | null;
 };
 
 type HistoryAction =
-  | { type: "commit"; next: ProjectState }
+  | { type: "commit"; next: ProjectState; group?: string }
+  | { type: "begin-group"; id: string }
+  | { type: "end-group"; id: string }
   | { type: "load"; next: ProjectState }
   | { type: "undo" }
   | { type: "redo" };
 
+type LayoutVariantPreview = {
+  seed: number;
+  instances: PatternInstance[];
+  placedCount: number;
+  requestedCount: number;
+};
+
 const STORAGE_KEY = "loeme-motif-mvp-v2";
 const LEGACY_STORAGE_KEY = "loeme-motif-mvp-v1";
+const ARRANGE_PREVIEW_COLORS = ["#665d7b"];
+const ARRANGE_PREVIEW_BACKGROUND = "#f5f3f8";
 
 const DEFAULT_COMPOSE: ComposeSettings = {
   enabled: false,
@@ -69,13 +83,32 @@ const initialProject: ProjectState = {
 
 function historyReducer(state: HistoryState, action: HistoryAction): HistoryState {
   if (action.type === "load") {
-    return { past: [], present: action.next, future: [] };
+    return { past: [], present: action.next, future: [], activeGroup: null };
+  }
+  if (action.type === "begin-group") {
+    if (state.activeGroup?.id === action.id) return state;
+    return { ...state, activeGroup: { id: action.id, hasCommitted: false } };
+  }
+  if (action.type === "end-group") {
+    if (state.activeGroup?.id !== action.id) return state;
+    return { ...state, activeGroup: null };
   }
   if (action.type === "commit") {
+    const grouped = Boolean(action.group && state.activeGroup?.id === action.group);
+    if (grouped && state.activeGroup?.hasCommitted) {
+      return {
+        ...state,
+        present: action.next,
+        future: [],
+      };
+    }
     return {
       past: [...state.past.slice(-39), state.present],
       present: action.next,
       future: [],
+      activeGroup: grouped && action.group
+        ? { id: action.group, hasCommitted: true }
+        : null,
     };
   }
   if (action.type === "undo") {
@@ -85,6 +118,7 @@ function historyReducer(state: HistoryState, action: HistoryAction): HistoryStat
       past: state.past.slice(0, -1),
       present: previous,
       future: [state.present, ...state.future],
+      activeGroup: null,
     };
   }
   const next = state.future[0];
@@ -93,6 +127,7 @@ function historyReducer(state: HistoryState, action: HistoryAction): HistoryStat
     past: [...state.past, state.present],
     present: next,
     future: state.future.slice(1),
+    activeGroup: null,
   };
 }
 
@@ -139,6 +174,66 @@ function PalettePreview({ motifs, colors, background }: { motifs: Motif[]; color
   );
 }
 
+function layoutSettingsFor(settings: StudioSettings, seed = settings.seed) {
+  return {
+    algorithmVersion: settings.algorithmVersion,
+    columns: settings.columns,
+    gridAssignment: settings.gridAssignment,
+    gridOffset: settings.gridOffset,
+    height: settings.height,
+    layoutMode: settings.layoutMode,
+    minDistance: settings.minDistance,
+    motifWeights: settings.motifWeights,
+    organicStrategy: settings.organicStrategy,
+    rotation: settings.rotation,
+    scaleMax: settings.scaleMax,
+    scaleMin: settings.scaleMin,
+    seed,
+    surfaceMode: settings.surfaceMode,
+    targetCount: settings.targetCount,
+    width: settings.width,
+  };
+}
+
+function VariantPreview({
+  motifs,
+  instances,
+  settings,
+  colors,
+  background,
+}: {
+  motifs: Motif[];
+  instances: PatternInstance[];
+  settings: StudioSettings;
+  colors: string[];
+  background: string;
+}) {
+  const motifById = new Map(motifs.map((motif) => [motif.id, motif]));
+  const previewInstances = settings.surfaceMode === "repeat"
+    ? withWrapCopies(instances, settings.width, settings.height)
+    : instances;
+
+  return (
+    <svg viewBox={`0 0 ${settings.width} ${settings.height}`} aria-hidden="true" preserveAspectRatio="xMidYMid slice">
+      <rect width={settings.width} height={settings.height} fill={background} />
+      {previewInstances.map((instance) => {
+        const motif = motifById.get(instance.motifId);
+        return motif
+          ? <MotifGlyph key={instance.id} motif={motif} instance={instance} colors={colors} />
+          : null;
+      })}
+    </svg>
+  );
+}
+
+function retainsFixedColors(motif: Motif) {
+  if (motif.source !== "upload") return false;
+  if (motif.paintMode) return motif.paintMode !== "remappable";
+  const usesCurrentColor = /\b(?:fill|stroke)=["']currentColor["']/i.test(motif.body);
+  const hasLiteralColor = /\b(?:fill|stroke)=["'](?!currentColor\b|none\b|inherit\b|transparent\b)[^"']+["']/i.test(motif.body);
+  return hasLiteralColor || !usesCurrentColor;
+}
+
 function RangeField({
   label,
   value,
@@ -147,6 +242,9 @@ function RangeField({
   step = 1,
   suffix,
   onChange,
+  interactionId,
+  onInteractionStart,
+  onInteractionEnd,
 }: {
   label: string;
   value: number;
@@ -154,7 +252,10 @@ function RangeField({
   max: number;
   step?: number;
   suffix?: string;
-  onChange: (value: number) => void;
+  onChange: (value: number, group: string) => void;
+  interactionId: string;
+  onInteractionStart: (group: string) => void;
+  onInteractionEnd: (group: string) => void;
 }) {
   return (
     <label className="motif-field">
@@ -166,7 +267,14 @@ function RangeField({
           max={max}
           step={step}
           value={value}
-          onChange={(event) => onChange(Number(event.target.value))}
+          onFocus={() => onInteractionStart(interactionId)}
+          onBlur={() => onInteractionEnd(interactionId)}
+          onPointerDown={() => onInteractionStart(interactionId)}
+          onPointerUp={() => onInteractionEnd(interactionId)}
+          onPointerCancel={() => onInteractionEnd(interactionId)}
+          onKeyDown={() => onInteractionStart(interactionId)}
+          onKeyUp={() => onInteractionEnd(interactionId)}
+          onChange={(event) => onChange(Number(event.target.value), interactionId)}
         />
         <output>
           {Number.isInteger(step) ? value : value.toFixed(2)}{suffix}
@@ -181,13 +289,15 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
     past: [],
     present: initialProject,
     future: [],
+    activeGroup: null,
   });
   const [hydrated, setHydrated] = useState(false);
-  const [saveState, setSaveState] = useState<"Saved" | "Saving">("Saved");
+  const [saveState, setSaveState] = useState<"Saved" | "Saving" | "Not saved">("Saved");
   const [libraryMode, setLibraryMode] = useState<"starter" | "project">("starter");
-  const [selectedNode, setSelectedNode] = useState<NodeId>("arrange");
-  const [viewedNode, setViewedNode] = useState<NodeId>("arrange");
+  const [currentNode, setCurrentNode] = useState<NodeId>("arrange");
+  const [previewMode, setPreviewMode] = useState<"current" | "final">("current");
   const [notice, setNotice] = useState<string>("");
+  const [variantPreviews, setVariantPreviews] = useState<LayoutVariantPreview[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const project = history.present;
   const settings = project.settings;
@@ -273,13 +383,6 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
     () => colorizeInstances(layoutInstances, palette.colors),
     [layoutInstances, palette.colors],
   );
-  const displayedInstances = useMemo(
-    () => settings.surfaceMode === "repeat"
-      ? withWrapCopies(instances, settings.width, settings.height)
-      : instances,
-    [instances, settings.surfaceMode, settings.width, settings.height],
-  );
-
   useEffect(() => {
     if (startFresh) {
       window.localStorage.removeItem(STORAGE_KEY);
@@ -338,7 +441,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(project));
         setSaveState("Saved");
       } catch {
-        setSaveState("Saved");
+        setSaveState("Not saved");
         setNotice("本地存储空间不足，请先导出 SVG 或重置项目。");
       }
     }, 280);
@@ -351,18 +454,40 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  function commit(next: ProjectState) {
+  function commit(next: ProjectState, group?: string, preserveVariants = false) {
+    if (!preserveVariants) setVariantPreviews([]);
     setSaveState("Saving");
-    dispatch({ type: "commit", next });
+    dispatch({ type: "commit", next, group });
+  }
+
+  function beginHistoryGroup(id: string) {
+    dispatch({ type: "begin-group", id });
+  }
+
+  function endHistoryGroup(id: string) {
+    dispatch({ type: "end-group", id });
+  }
+
+  function groupedFocusProps(id: string) {
+    return {
+      onFocus: () => beginHistoryGroup(id),
+      onBlur: () => endHistoryGroup(id),
+    };
+  }
+
+  function openNode(id: NodeId) {
+    setCurrentNode(id);
+    setPreviewMode("current");
   }
 
   function moveHistory(type: "undo" | "redo") {
+    setVariantPreviews([]);
     setSaveState("Saving");
     dispatch({ type });
   }
 
-  function updateSettings(patch: Partial<StudioSettings>) {
-    commit({ ...project, settings: { ...settings, ...patch } });
+  function updateSettings(patch: Partial<StudioSettings>, group?: string, preserveVariants = false) {
+    commit({ ...project, settings: { ...settings, ...patch } }, group, preserveVariants);
   }
 
   function updateCompose(patch: Partial<ComposeSettings>) {
@@ -443,28 +568,69 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
     updateSettings({ seed: values[0] || 1 });
   }
 
-  function updateScaleVariation(value: number) {
-    const center = (settings.scaleMin + settings.scaleMax) / 2;
-    const halfRange = value / 200;
-    updateSettings({
-      scaleMin: Math.max(0.2, Number((center - halfRange).toFixed(2))),
-      scaleMax: Math.min(1.8, Number((center + halfRange).toFixed(2))),
-    });
+  function updateSeed(seed: number) {
+    updateSettings({ seed: seed || 1 }, "seed");
   }
 
-  function updatePaletteColor(index: number, color: string) {
+  function exploreVariants() {
+    const values = new Uint32Array(2);
+    window.crypto.getRandomValues(values);
+    const seeds = [
+      settings.seed,
+      values[0] || settings.seed + 1,
+      values[1] || settings.seed + 2,
+    ];
+    setVariantPreviews(seeds.map((seed) => {
+      const result = buildInstances(
+        arrangementMotifs,
+        arrangementActiveIds,
+        layoutSettingsFor(settings, seed),
+      );
+      return {
+        seed,
+        instances: colorizeInstances(result.instances, ARRANGE_PREVIEW_COLORS),
+        placedCount: result.placedCount,
+        requestedCount: result.requestedCount,
+      };
+    }));
+  }
+
+  function applyVariant(seed: number) {
+    updateSettings({ seed }, undefined, true);
+  }
+
+  function updateScaleVariation(value: number, group?: string) {
+    const center = (settings.scaleMin + settings.scaleMax) / 2;
+    const spread = Math.min(1.6, Math.max(0, value / 100));
+    let scaleMin = center - spread / 2;
+    let scaleMax = center + spread / 2;
+    if (scaleMin < 0.2) {
+      scaleMax += 0.2 - scaleMin;
+      scaleMin = 0.2;
+    }
+    if (scaleMax > 1.8) {
+      scaleMin -= scaleMax - 1.8;
+      scaleMax = 1.8;
+    }
+    updateSettings({
+      scaleMin: Number(Math.max(0.2, scaleMin).toFixed(2)),
+      scaleMax: Number(Math.min(1.8, scaleMax).toFixed(2)),
+    }, group);
+  }
+
+  function updatePaletteColor(index: number, color: string, group?: string) {
     const colors = [...palette.colors];
     colors[index] = color;
-    updateSettings({ paletteColors: colors });
+    updateSettings({ paletteColors: colors }, group);
   }
 
-  function updateMotifWeight(id: string, weight: number) {
+  function updateMotifWeight(id: string, weight: number, group?: string) {
     updateSettings({
       motifWeights: {
         ...settings.motifWeights,
         [id]: Number(Math.max(0.25, Math.min(3, weight)).toFixed(2)),
       },
-    });
+    }, group);
   }
 
   function downloadSvg() {
@@ -488,6 +654,9 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
     window.localStorage.removeItem(STORAGE_KEY);
     window.localStorage.removeItem(LEGACY_STORAGE_KEY);
     dispatch({ type: "load", next: initialProject });
+    setVariantPreviews([]);
+    setCurrentNode("arrange");
+    setPreviewMode("current");
     setNotice("项目已重置。");
   }
 
@@ -495,9 +664,18 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
   const inputOutputMotifs = project.activeIds
     .map((id) => motifs.find((motif) => motif.id === id))
     .filter((motif): motif is Motif => Boolean(motif));
-  const isSetPreview = viewedNode === "input" || viewedNode === "compose";
-  const previewMotifs = viewedNode === "input" ? inputOutputMotifs : arrangeInputMotifs;
-  const tiles = viewedNode === "output" && settings.surfaceMode === "repeat" ? 3 : 1;
+  const previewNode: NodeId = previewMode === "final" ? "output" : currentNode;
+  const isSetPreview = previewNode === "input" || previewNode === "compose";
+  const previewMotifs = previewNode === "input" ? inputOutputMotifs : arrangeInputMotifs;
+  const canvasColors = previewNode === "arrange" ? ARRANGE_PREVIEW_COLORS : palette.colors;
+  const canvasBackground = previewNode === "arrange" ? ARRANGE_PREVIEW_BACKGROUND : palette.background;
+  const canvasInstances = previewNode === "arrange"
+    ? colorizeInstances(layoutInstances, canvasColors)
+    : instances;
+  const displayedInstances = settings.surfaceMode === "repeat"
+    ? withWrapCopies(canvasInstances, settings.width, settings.height)
+    : canvasInstances;
+  const tiles = previewNode === "output" && settings.surfaceMode === "repeat" ? 3 : 1;
   const canvasWidth = settings.width * tiles;
   const canvasHeight = settings.height * tiles;
   const tileEntries = Array.from({ length: tiles * tiles }, (_, index) => ({
@@ -506,13 +684,13 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
     id: index,
   }));
   const scaleVariation = Math.round((settings.scaleMax - settings.scaleMin) * 100);
-  const canvasTitle = viewedNode === "input"
+  const canvasTitle = previewNode === "input"
     ? "Input · Motif Set Output"
-    : viewedNode === "compose"
+    : previewNode === "compose"
       ? project.compose.enabled ? "Compose · Motif Set Output" : "Compose Bypassed · Input Passed Through"
-      : viewedNode === "arrange"
+      : previewNode === "arrange"
         ? "Arrangement Preview"
-        : viewedNode === "colorway"
+        : previewNode === "colorway"
           ? "Colorway Preview"
           : settings.surfaceMode === "repeat" ? "Seamless Preview" : "Artboard Preview";
   const nodeContracts: Record<NodeId, { input: string; output: string; summary: string }> = {
@@ -529,24 +707,60 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
     { id: "colorway", type: "SCENE", name: "Colorway", summary: palette.name },
     { id: "output", type: "FILE", name: "Output", summary: settings.surfaceMode === "repeat" ? "Repeat SVG" : "Artboard SVG" },
   ];
+  const composedFixedColorImports = arrangementActiveIds.includes("composition-live")
+    ? resolvedComposeIds
+      .map((id) => motifs.find((motif) => motif.id === id))
+      .filter((motif): motif is Motif => Boolean(motif))
+      .filter(retainsFixedColors)
+    : [];
+  const fixedColorImports = Array.from(new Map(
+    [...arrangeInputMotifs.filter(retainsFixedColors), ...composedFixedColorImports]
+      .map((motif) => [motif.id, motif]),
+  ).values());
+  const outputWarnings: string[] = [];
+  if (layoutResult.status === "capacity-limited") {
+    outputWarnings.push(`${layoutResult.unplacedCount} requested instances were not placed`);
+  }
+  if (fixedColorImports.length) {
+    outputWarnings.push(`${fixedColorImports.length} imported motif${fixedColorImports.length === 1 ? " keeps" : "s keep"} fixed colors`);
+  }
+  const outputHealth = !arrangeInputMotifs.length || !instances.length
+    ? {
+      level: "blocked" as const,
+      label: "Blocked",
+      summary: !arrangeInputMotifs.length ? "Add at least one motif" : "No instances available to export",
+    }
+    : outputWarnings.length
+      ? { level: "warning" as const, label: "Warning", summary: outputWarnings.join(" · ") }
+      : { level: "ready" as const, label: "Ready", summary: `${instances.length} vector instances validated` };
+  const footerHealth = currentNode === "output"
+    ? outputHealth
+    : currentNode === "arrange" && layoutResult.status === "capacity-limited"
+      ? {
+        level: "warning" as const,
+        label: "Warning",
+        summary: `${layoutResult.placedCount} of ${layoutResult.requestedCount} instances placed`,
+      }
+      : { level: "ready" as const, label: "Live", summary: nodeContracts[currentNode].summary };
 
   return (
     <main className="motif-app">
       <header className="motif-topbar">
         <div className="motif-brand" aria-label="Motif application">
-          <img className="motif-brand-app-icon" src="/brand/motif-app-icon.svg" alt="" />
+          <Image className="motif-brand-app-icon" src="/brand/motif-app-icon.svg" alt="" width={22} height={22} priority />
           <strong>Motif</strong>
         </div>
 
         <div className="motif-project-title">
-          <span className="motif-back">←</span>
+          <Link className="motif-back" href="/" aria-label="Back to Loeme home">←</Link>
           <input
             aria-label="Project name"
             value={project.name}
-            onChange={(event) => commit({ ...project, name: event.target.value })}
+            {...groupedFocusProps("project-name")}
+            onChange={(event) => commit({ ...project, name: event.target.value }, "project-name")}
           />
-          <span className={`motif-save-dot ${saveState === "Saving" ? "is-saving" : ""}`} />
-          <span>{saveState}</span>
+          <span className={`motif-save-dot ${saveState === "Saving" ? "is-saving" : ""} ${saveState === "Not saved" ? "is-unsaved" : ""}`} />
+          <span aria-live="polite">{saveState}</span>
         </div>
 
         <nav className="motif-view-tabs" aria-label="Workspace views">
@@ -554,10 +768,10 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
           <button disabled title="Network will follow after MVP validation">Network <small>Soon</small></button>
           <button
             className="motif-surface-tab"
-            onClick={() => updateSettings({ surfaceMode: settings.surfaceMode === "repeat" ? "artboard" : "repeat" })}
-            title="Global surface context · affects Arrange edge behavior"
+            onClick={() => openNode("output")}
+            title="Open Output surface settings"
           >
-            <small>Surface</small> {settings.surfaceMode === "repeat" ? "Tile" : "Artboard"}
+            <small>Surface</small> {settings.surfaceMode === "repeat" ? "Repeat" : "Artboard"}
           </button>
         </nav>
 
@@ -574,7 +788,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
             disabled={!history.future.length}
             onClick={() => moveHistory("redo")}
           >↷</button>
-          <button className="motif-export-top" onClick={downloadSvg}>Export Final SVG <span>↗</span></button>
+          <button className="motif-export-top" disabled={outputHealth.level === "blocked"} onClick={downloadSvg}>Export Final SVG <span>↗</span></button>
         </div>
       </header>
 
@@ -643,25 +857,36 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
           <div className="motif-canvas-panel motif-panel">
             <div className="motif-canvas-header">
               <div>
-                <span className="motif-eyebrow">VIEWING {viewedNode.toUpperCase()} · LIVE OUTPUT</span>
+                <span className="motif-eyebrow">
+                  {previewMode === "final" ? "FINAL OUTPUT" : `CURRENT STEP · ${currentNode.toUpperCase()}`}
+                </span>
                 <h1>{canvasTitle}</h1>
               </div>
               <div className="motif-canvas-status">
                 <span className="motif-live-dot" /> Live
-                {selectedNode !== viewedNode && (
-                  <button onClick={() => setViewedNode(selectedNode)}>View selected</button>
-                )}
+                <div className="motif-preview-switch" role="group" aria-label="Canvas preview">
+                  <button
+                    className={previewMode === "current" ? "is-active" : ""}
+                    aria-pressed={previewMode === "current"}
+                    onClick={() => setPreviewMode("current")}
+                  >Current step</button>
+                  <button
+                    className={previewMode === "final" ? "is-active" : ""}
+                    aria-pressed={previewMode === "final"}
+                    onClick={() => setPreviewMode("final")}
+                  >Final</button>
+                </div>
                 {!isSetPreview && (
                   <button onClick={() => updateSettings({ showBoundary: !settings.showBoundary })}>
-                    {settings.showBoundary ? "Hide grid" : "Show grid"}
+                    {settings.showBoundary ? "Hide boundary" : "Show boundary"}
                   </button>
                 )}
               </div>
             </div>
 
-            <div className="motif-canvas-stage" style={{ background: palette.background }}>
+            <div className="motif-canvas-stage" style={{ background: canvasBackground }}>
               {isSetPreview ? (
-                <div className="motif-set-preview" role="img" aria-label={`${viewedNode} output with ${previewMotifs.length} motifs`}>
+                <div className="motif-set-preview" role="img" aria-label={`${previewNode} output with ${previewMotifs.length} motifs`}>
                   <div className="motif-set-preview-grid">
                     {previewMotifs.map((motif, index) => (
                       <div key={motif.id} className={motif.id === "composition-live" ? "is-composition" : ""}>
@@ -672,7 +897,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                     ))}
                   </div>
                   <div className="motif-set-output-label">
-                    <span>{nodeContracts[viewedNode].output}</span>
+                    <span>{nodeContracts[previewNode].output}</span>
                     <strong>{previewMotifs.length} motifs</strong>
                   </div>
                 </div>
@@ -690,11 +915,11 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                 </defs>
                 {tileEntries.map((tile) => (
                   <g key={tile.id} transform={`translate(${tile.x} ${tile.y})`}>
-                    <rect width={settings.width} height={settings.height} fill={palette.background} />
+                    <rect width={settings.width} height={settings.height} fill={canvasBackground} />
                     <g clipPath="url(#motif-tile-clip)">
                       {displayedInstances.map((instance) => {
                         const motif = motifMap.get(instance.motifId);
-                        return motif ? <MotifGlyph key={`${tile.id}-${instance.id}`} motif={motif} instance={instance} colors={palette.colors} /> : null;
+                        return motif ? <MotifGlyph key={`${tile.id}-${instance.id}`} motif={motif} instance={instance} colors={canvasColors} /> : null;
                       })}
                     </g>
                     {settings.showBoundary && (
@@ -718,8 +943,8 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
               <div className="motif-canvas-toolbar">
                 {isSetPreview ? (
                   <>
-                    <span>{nodeContracts[viewedNode].input}</span>
-                    <span>→ {nodeContracts[viewedNode].output}</span>
+                    <span>{nodeContracts[previewNode].input}</span>
+                    <span>→ {nodeContracts[previewNode].output}</span>
                     <span>{previewMotifs.length} motifs</span>
                   </>
                 ) : (
@@ -745,16 +970,16 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
               {recipeNodes.map((node, index) => (
                 <div className="motif-node-wrap" key={node.id}>
                   <button
-                    className={`motif-node-card ${selectedNode === node.id ? "is-selected" : ""} ${viewedNode === node.id ? "is-viewed" : ""} ${node.id === "compose" && !project.compose.enabled ? "is-bypassed is-optional" : ""}`}
-                    onClick={() => { setSelectedNode(node.id); setViewedNode(node.id); }}
-                    aria-pressed={selectedNode === node.id}
+                    className={`motif-node-card ${currentNode === node.id ? "is-selected" : ""} ${previewNode === node.id ? "is-viewed" : ""} ${node.id === "compose" && !project.compose.enabled ? "is-bypassed is-optional" : ""}`}
+                    onClick={() => openNode(node.id)}
+                    aria-pressed={currentNode === node.id}
                     aria-label={`${node.name} node, ${node.summary}`}
                   >
                     <span>{node.type}</span>
                     <strong>{node.name}</strong>
                     <small>{node.summary}</small>
                     <em>{nodeContracts[node.id].input} → {nodeContracts[node.id].output}</em>
-                    {viewedNode === node.id && <b className="motif-viewer-flag" title="Shown on canvas">VIEW</b>}
+                    {previewNode === node.id && <b className="motif-viewer-flag" title="Shown on canvas">VIEW</b>}
                     <i />
                   </button>
                   {index < 4 && <span className="motif-node-link" aria-hidden="true">→</span>}
@@ -767,21 +992,21 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
         <aside className="motif-inspector motif-panel">
           <div className="motif-inspector-title">
             <div>
-              <span className={`motif-node-status ${selectedNode === "compose" && !project.compose.enabled ? "is-bypassed" : ""}`} />
-              <span className="motif-eyebrow">{selectedNode.toUpperCase()}</span>
-              <h2>{selectedNode === "input" ? "Input set" : selectedNode === "compose" ? "Compose" : selectedNode === "arrange" ? "Arrange" : selectedNode === "colorway" ? "Colorway" : "Output"}</h2>
+              <span className={`motif-node-status ${currentNode === "compose" && !project.compose.enabled ? "is-bypassed" : ""}`} />
+              <span className="motif-eyebrow">{currentNode.toUpperCase()}</span>
+              <h2>{currentNode === "input" ? "Input set" : currentNode === "compose" ? "Compose" : currentNode === "arrange" ? "Arrange" : currentNode === "colorway" ? "Colorway" : "Output"}</h2>
             </div>
-            <button className="motif-reset-button" aria-label="Reset project" title="Reset project" onClick={resetProject}>Reset</button>
+            <button className="motif-reset-button" aria-label="Reset project" title="Reset project" onClick={resetProject}>Reset project</button>
           </div>
 
           <div className="motif-node-contract">
-            <div><span>INPUT</span><strong>{nodeContracts[selectedNode].input}</strong></div>
+            <div><span>INPUT</span><strong>{nodeContracts[currentNode].input}</strong></div>
             <i aria-hidden="true">→</i>
-            <div><span>OUTPUT</span><strong>{nodeContracts[selectedNode].output}</strong></div>
+            <div><span>OUTPUT</span><strong>{nodeContracts[currentNode].output}</strong></div>
           </div>
 
           <div className="motif-inspector-body">
-          {selectedNode === "input" && (
+          {currentNode === "input" && (
             <div className="motif-inspector-section">
               <p className="motif-section-copy">Choose Starter motifs or import a simple SVG. This exact set flows into the next active node.</p>
               <div className="motif-active-stack">
@@ -794,12 +1019,18 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                     </div>
                   ) : null;
                 })}
+                {project.activeIds.length > 8 && (
+                  <div className="motif-active-more" aria-label={`${project.activeIds.length - 8} more active motifs`}>
+                    <strong>+{project.activeIds.length - 8}</strong>
+                    <span>More</span>
+                  </div>
+                )}
               </div>
               <button className="motif-primary-light" onClick={() => fileInputRef.current?.click()}>＋ Add SVG motif</button>
             </div>
           )}
 
-          {selectedNode === "compose" && (
+          {currentNode === "compose" && (
             <>
               <div className="motif-inspector-section">
                 <div className="motif-config-intro">
@@ -897,7 +1128,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
             </>
           )}
 
-          {selectedNode === "arrange" && (
+          {currentNode === "arrange" && (
             <>
               <div className="motif-inspector-section">
                 <div className="motif-config-intro">
@@ -936,10 +1167,10 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                     <span>ORGANIC FILL</span>
                     <div>
                       <button className={settings.organicStrategy === "classic" ? "is-active" : ""} aria-pressed={settings.organicStrategy === "classic"} onClick={() => updateSettings({ organicStrategy: "classic" })}>
-                        <strong>Classic</strong><small>First valid position</small>
+                        <strong>Open</strong><small>Airier distribution with more breathing room</small>
                       </button>
                       <button className={settings.organicStrategy === "dense" ? "is-active" : ""} aria-pressed={settings.organicStrategy === "dense"} onClick={() => updateSettings({ organicStrategy: "dense" })}>
-                        <strong>Dense</strong><small>Score candidates + fillers</small>
+                        <strong>Packed</strong><small>Fills tighter gaps with smaller motifs</small>
                       </button>
                     </div>
                   </div>
@@ -976,7 +1207,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                 {layoutResult.status === "capacity-limited" && (
                   <div className="motif-capacity-warning" role="status">
                     <b>Canvas capacity reached</b>
-                    <span>Reduce Density, Spacing or motif size. Existing placements remain collision-safe.</span>
+                    <span>Reduce Target count, spacing or motif size. Existing placements remain collision-safe.</span>
                   </div>
                 )}
               </div>
@@ -986,16 +1217,97 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                     <span className="motif-section-label">QUICK CONTROLS</span>
                     <strong>Shape the layout</strong>
                   </div>
-                  <button onClick={shuffleSeed}>New variation ↻</button>
+                  <button onClick={exploreVariants}>Explore 3 ↗</button>
                 </div>
-                <RangeField label="Density" value={settings.targetCount} min={4} max={96} onChange={(value) => updateSettings({ targetCount: value })} />
+                <RangeField
+                  label="Target count"
+                  value={settings.targetCount}
+                  min={4}
+                  max={96}
+                  interactionId="target-count"
+                  onInteractionStart={beginHistoryGroup}
+                  onInteractionEnd={endHistoryGroup}
+                  onChange={(value, group) => updateSettings({ targetCount: value }, group)}
+                />
                 {settings.layoutMode === "grid" ? (
-                  <RangeField label="Columns" value={settings.columns} min={2} max={12} onChange={(value) => updateSettings({ columns: value })} />
+                  <RangeField
+                    label="Columns"
+                    value={settings.columns}
+                    min={2}
+                    max={12}
+                    interactionId="grid-columns"
+                    onInteractionStart={beginHistoryGroup}
+                    onInteractionEnd={endHistoryGroup}
+                    onChange={(value, group) => updateSettings({ columns: value }, group)}
+                  />
                 ) : (
-                  <RangeField label="Spacing" value={settings.minDistance} min={0} max={28} suffix=" px" onChange={(value) => updateSettings({ minDistance: value })} />
+                  <RangeField
+                    label="Spacing"
+                    value={settings.minDistance}
+                    min={0}
+                    max={28}
+                    suffix=" px"
+                    interactionId="minimum-spacing"
+                    onInteractionStart={beginHistoryGroup}
+                    onInteractionEnd={endHistoryGroup}
+                    onChange={(value, group) => updateSettings({ minDistance: value }, group)}
+                  />
                 )}
-                <RangeField label="Size variation" value={scaleVariation} min={0} max={100} suffix="%" onChange={updateScaleVariation} />
-                <RangeField label="Rotation variation" value={settings.rotation} min={0} max={180} suffix="°" onChange={(value) => updateSettings({ rotation: value })} />
+                <RangeField
+                  label="Size variation"
+                  value={scaleVariation}
+                  min={0}
+                  max={160}
+                  suffix="%"
+                  interactionId="size-variation"
+                  onInteractionStart={beginHistoryGroup}
+                  onInteractionEnd={endHistoryGroup}
+                  onChange={updateScaleVariation}
+                />
+                <RangeField
+                  label="Rotation variation"
+                  value={settings.rotation}
+                  min={0}
+                  max={180}
+                  suffix="°"
+                  interactionId="rotation-variation"
+                  onInteractionStart={beginHistoryGroup}
+                  onInteractionEnd={endHistoryGroup}
+                  onChange={(value, group) => updateSettings({ rotation: value }, group)}
+                />
+                <div className="motif-variant-lab">
+                  <div>
+                    <span className="motif-section-label">VARIATIONS</span>
+                    <small>{variantPreviews.length ? "Compare without losing the original" : "Generate three comparable seeds"}</small>
+                  </div>
+                  {variantPreviews.length ? (
+                    <div className="motif-variant-grid">
+                      {variantPreviews.map((variant, index) => (
+                        <button
+                          key={variant.seed}
+                          className={settings.seed === variant.seed ? "is-active" : ""}
+                          aria-pressed={settings.seed === variant.seed}
+                          onClick={() => applyVariant(variant.seed)}
+                        >
+                          <VariantPreview
+                            motifs={arrangementMotifs}
+                            instances={variant.instances}
+                            settings={settings}
+                            colors={ARRANGE_PREVIEW_COLORS}
+                            background={ARRANGE_PREVIEW_BACKGROUND}
+                          />
+                          <span>{index === 0 ? "Original" : `Option ${index}`}</span>
+                          <small>{variant.placedCount}/{variant.requestedCount}</small>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <button className="motif-variant-empty" onClick={exploreVariants}>
+                      <span>◫</span>
+                      Compare three layouts
+                    </button>
+                  )}
+                </div>
               </div>
               <details className="motif-advanced-controls">
                 <summary><span>Advanced controls</span><small>Engine v{settings.algorithmVersion} · Seed & scale</small></summary>
@@ -1006,13 +1318,34 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                       <input
                         type="number"
                         value={settings.seed}
-                        onChange={(event) => updateSettings({ seed: Number(event.target.value) || 1 })}
+                        {...groupedFocusProps("seed")}
+                        onChange={(event) => updateSeed(Number(event.target.value))}
                       />
                     </label>
                     <button onClick={shuffleSeed}>Shuffle</button>
                   </div>
-                  <RangeField label="Minimum scale" value={settings.scaleMin} min={0.2} max={1.4} step={0.02} onChange={(value) => updateSettings({ scaleMin: Math.min(value, settings.scaleMax) })} />
-                  <RangeField label="Maximum scale" value={settings.scaleMax} min={0.3} max={1.8} step={0.02} onChange={(value) => updateSettings({ scaleMax: Math.max(value, settings.scaleMin) })} />
+                  <RangeField
+                    label="Minimum scale"
+                    value={settings.scaleMin}
+                    min={0.2}
+                    max={1.4}
+                    step={0.02}
+                    interactionId="minimum-scale"
+                    onInteractionStart={beginHistoryGroup}
+                    onInteractionEnd={endHistoryGroup}
+                    onChange={(value, group) => updateSettings({ scaleMin: Math.min(value, settings.scaleMax) }, group)}
+                  />
+                  <RangeField
+                    label="Maximum scale"
+                    value={settings.scaleMax}
+                    min={0.3}
+                    max={1.8}
+                    step={0.02}
+                    interactionId="maximum-scale"
+                    onInteractionStart={beginHistoryGroup}
+                    onInteractionEnd={endHistoryGroup}
+                    onChange={(value, group) => updateSettings({ scaleMax: Math.max(value, settings.scaleMin) }, group)}
+                  />
                   {(settings.layoutMode === "scatter" || settings.gridAssignment === "weighted") && (
                     <div className="motif-weight-controls">
                       <span className="motif-section-label">MOTIF WEIGHTS</span>
@@ -1022,7 +1355,21 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                         return (
                           <label key={motif.id}>
                             <span>{motif.name}</span>
-                            <input type="range" min="0.25" max="3" step="0.25" value={weight} onChange={(event) => updateMotifWeight(motif.id, Number(event.target.value))} />
+                            <input
+                              type="range"
+                              min="0.25"
+                              max="3"
+                              step="0.25"
+                              value={weight}
+                              onFocus={() => beginHistoryGroup(`motif-weight-${motif.id}`)}
+                              onBlur={() => endHistoryGroup(`motif-weight-${motif.id}`)}
+                              onPointerDown={() => beginHistoryGroup(`motif-weight-${motif.id}`)}
+                              onPointerUp={() => endHistoryGroup(`motif-weight-${motif.id}`)}
+                              onPointerCancel={() => endHistoryGroup(`motif-weight-${motif.id}`)}
+                              onKeyDown={() => beginHistoryGroup(`motif-weight-${motif.id}`)}
+                              onKeyUp={() => endHistoryGroup(`motif-weight-${motif.id}`)}
+                              onChange={(event) => updateMotifWeight(motif.id, Number(event.target.value), `motif-weight-${motif.id}`)}
+                            />
                             <output>{weight.toFixed(2)}×</output>
                           </label>
                         );
@@ -1034,7 +1381,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
             </>
           )}
 
-          {selectedNode === "colorway" && (
+          {currentNode === "colorway" && (
             <>
               <div className="motif-inspector-section">
                 <div className="motif-config-intro">
@@ -1051,7 +1398,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                       onClick={() => updateSettings({ paletteId: item.id, paletteColors: null, backgroundColor: null })}
                     >
                       <PalettePreview
-                        motifs={motifs.filter((motif) => project.activeIds.includes(motif.id))}
+                        motifs={arrangeInputMotifs}
                         colors={item.colors}
                         background={item.background}
                       />
@@ -1078,13 +1425,25 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                 <div className="motif-color-map">
                   <label>
                     <span><i style={{ background: palette.background }} />Background</span>
-                    <input aria-label="Background color" type="color" value={palette.background} onChange={(event) => updateSettings({ backgroundColor: event.target.value })} />
+                    <input
+                      aria-label="Background color"
+                      type="color"
+                      value={palette.background}
+                      {...groupedFocusProps("background-color")}
+                      onChange={(event) => updateSettings({ backgroundColor: event.target.value }, "background-color")}
+                    />
                     <code>{palette.background.toUpperCase()}</code>
                   </label>
                   {palette.colors.slice(0, 5).map((color, index) => (
-                    <label key={`${index}-${color}`}>
+                    <label key={index}>
                       <span><i style={{ background: color }} />Color {index + 1}</span>
-                      <input aria-label={`Palette color ${index + 1}`} type="color" value={color} onChange={(event) => updatePaletteColor(index, event.target.value)} />
+                      <input
+                        aria-label={`Palette color ${index + 1}`}
+                        type="color"
+                        value={color}
+                        {...groupedFocusProps(`palette-color-${index}`)}
+                        onChange={(event) => updatePaletteColor(index, event.target.value, `palette-color-${index}`)}
+                      />
                       <code>{color.toUpperCase()}</code>
                     </label>
                   ))}
@@ -1094,7 +1453,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
             </>
           )}
 
-          {selectedNode === "output" && (
+          {currentNode === "output" && (
             <>
               <div className="motif-inspector-section">
                 <div className="motif-config-intro">
@@ -1109,7 +1468,11 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                   <div>
                     <small>GLOBAL SURFACE</small>
                     <strong>{settings.surfaceMode === "repeat" ? "Seamless tile" : "Artboard"}</strong>
-                    <p>{settings.surfaceMode === "repeat" ? "Arrange wraps edge collisions." : "Arrange keeps motifs inside the canvas."}</p>
+                    <p>{settings.surfaceMode === "repeat"
+                      ? settings.layoutMode === "scatter"
+                        ? "Organic checks collisions across every edge."
+                        : "Crossing grid motifs wrap to opposite edges."
+                      : "Export clips geometry to the artboard."}</p>
                   </div>
                   <button onClick={() => updateSettings({ surfaceMode: settings.surfaceMode === "repeat" ? "artboard" : "repeat" })}>
                     Switch
@@ -1124,8 +1487,28 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
                   <button className={settings.width === 420 && settings.height === 720 ? "is-active" : ""} onClick={() => updateSettings({ width: 420, height: 720 })}><i className="is-portrait" />Portrait</button>
                 </div>
                 <div className="motif-size-grid">
-                  <label><span>Width</span><input type="number" min="240" max="1600" value={settings.width} onChange={(event) => updateSettings({ width: Math.max(240, Number(event.target.value)) })} /></label>
-                  <label><span>Height</span><input type="number" min="180" max="1200" value={settings.height} onChange={(event) => updateSettings({ height: Math.max(180, Number(event.target.value)) })} /></label>
+                  <label>
+                    <span>Width</span>
+                    <input
+                      type="number"
+                      min="240"
+                      max="1600"
+                      value={settings.width}
+                      {...groupedFocusProps("canvas-width")}
+                      onChange={(event) => updateSettings({ width: Math.min(1600, Math.max(240, Number(event.target.value) || 240)) }, "canvas-width")}
+                    />
+                  </label>
+                  <label>
+                    <span>Height</span>
+                    <input
+                      type="number"
+                      min="180"
+                      max="1200"
+                      value={settings.height}
+                      {...groupedFocusProps("canvas-height")}
+                      onChange={(event) => updateSettings({ height: Math.min(1200, Math.max(180, Number(event.target.value) || 180)) }, "canvas-height")}
+                    />
+                  </label>
                 </div>
                 <button className={`motif-boundary-toggle ${settings.showBoundary ? "is-active" : ""}`} role="switch" aria-checked={settings.showBoundary} onClick={() => updateSettings({ showBoundary: !settings.showBoundary })}>
                   <span><i />Show tile boundary</span><b>{settings.showBoundary ? "On" : "Off"}</b>
@@ -1133,7 +1516,7 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
               </div>
               {settings.surfaceMode === "repeat" && (
                 <div className="motif-repeat-note">
-                  <span>Square repeat</span>
+                  <span>Seamless repeat</span>
                   <strong>Edges wrapped</strong>
                   <p>Crossing motifs are copied to opposite edges and corners before export.</p>
                 </div>
@@ -1141,24 +1524,40 @@ export default function MotifStudio({ startFresh = false }: { startFresh?: boole
               <div className="motif-inspector-section">
                 <span className="motif-section-label">SVG READY CHECK</span>
                 <div className="motif-export-checks">
-                  <span><i>✓</i>Vector paths preserved</span>
-                  <span><i>✓</i>No embedded raster images</span>
-                  <span><i>✓</i>{settings.surfaceMode === "repeat" ? "Wrapped edge copies included" : "Artboard clipping applied"}</span>
+                  <span className={instances.length ? "is-ready" : "is-blocked"}>
+                    <i>{instances.length ? "✓" : "×"}</i>
+                    {instances.length ? `${instances.length} vector instances` : "No vector instances to export"}
+                  </span>
+                  <span className={layoutResult.status === "complete" ? "is-ready" : "is-warning"}>
+                    <i>{layoutResult.status === "complete" ? "✓" : "!"}</i>
+                    {layoutResult.status === "complete"
+                      ? `Target count met (${layoutResult.placedCount})`
+                      : `${layoutResult.placedCount} of ${layoutResult.requestedCount} instances placed`}
+                  </span>
+                  <span className={fixedColorImports.length ? "is-warning" : "is-ready"}>
+                    <i>{fixedColorImports.length ? "!" : "✓"}</i>
+                    {fixedColorImports.length
+                      ? `${fixedColorImports.length} imported motif${fixedColorImports.length === 1 ? " keeps" : "s keep"} fixed colors`
+                      : "Palette mapping is editable"}
+                  </span>
+                  <span className="is-ready">
+                    <i>✓</i>{settings.surfaceMode === "repeat" ? "Wrapped edge copies included" : "Artboard clipping applied"}
+                  </span>
                 </div>
               </div>
             </>
           )}
           </div>
 
-          <div className="motif-inspector-footer">
+          <div className={`motif-inspector-footer is-${footerHealth.level}`}>
             <div>
-              <span>Ready</span>
-              <small>{nodeContracts[selectedNode].summary}</small>
+              <span>{footerHealth.label}</span>
+              <small>{footerHealth.summary}</small>
             </div>
-            {selectedNode === "output" ? (
-              <button onClick={downloadSvg}>Export SVG <span>↗</span></button>
+            {currentNode === "output" ? (
+              <button disabled={outputHealth.level === "blocked"} onClick={downloadSvg}>Export SVG <span>↗</span></button>
             ) : (
-              <button onClick={() => setViewedNode("output")}>View final output <span>↗</span></button>
+              <button onClick={() => setPreviewMode("final")}>View final output <span>↗</span></button>
             )}
           </div>
         </aside>
