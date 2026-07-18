@@ -50,7 +50,7 @@ export default function Home() {
         <div className="home-products-head"><span>THE PRODUCTS / 01—03</span><Link href="/products">View all products <b>→</b></Link></div>
         <div className="home-product-grid">
           {products.map(product => (
-            <Link className={`home-product-card home-product-${product.theme}`} href={`/products#${product.theme}`} key={product.name}>
+            <Link className={`home-product-card home-product-${product.theme}`} href={product.href} key={product.name}>
               <div><span>{product.number}</span><i>{product.status}</i></div>
               <Image src={product.icon} alt="" width={64} height={64} />
               <h3>{product.name}</h3><p>{product.action}</p><b>↗</b>

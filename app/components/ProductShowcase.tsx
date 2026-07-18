@@ -16,7 +16,7 @@ export const products = [
   {
     number: "03", name: "Morph", action: "Grow", status: "Experiment",
     description: "Seed organic behavior, let it evolve, then freeze the right moment as an editable vector form.",
-    tags: ["REACTION DIFFUSION", "ORGANIC", "VECTOR OUTPUT"], href: "/products#morph", cta: "Meet Morph", theme: "morph", icon: "/brand/morph-app-icon.svg",
+    tags: ["REACTION DIFFUSION", "ORGANIC", "VECTOR OUTPUT"], href: "/apps/morph", cta: "Open Morph", theme: "morph", icon: "/brand/morph-app-icon.svg",
   },
 ];
 
